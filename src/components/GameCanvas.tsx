@@ -58,8 +58,14 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
   // Virtual Joystick touches
   const joystickTouch = useRef<{ id: number; startX: number; startY: number; curX: number; curY: number } | null>(null);
   const [joystickVector, setJoystickVector] = useState({ x: 0, y: 0 });
+  const joystickVectorRef = useRef({ x: 0, y: 0 });
   const [joystickCenter, setJoystickCenter] = useState<{ x: number; y: number } | null>(null);
   const [joystickActive, setJoystickActive] = useState(false);
+
+  const handleVectoredClickRef = useRef<(action: 'break' | 'place') => void>(() => {});
+  useEffect(() => {
+    handleVectoredClickRef.current = handleVectoredClick;
+  }, [inventory, hotbarIndex]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -216,8 +222,18 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
       setLockedUi(locked);
     };
 
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!isLocked.current) return;
+      if (e.button === 0) {
+        handleVectoredClickRef.current('break');
+      } else if (e.button === 2) {
+        handleVectoredClickRef.current('place');
+      }
+    };
+
     document.addEventListener('mousemove', handleMouseMovement);
     document.addEventListener('pointerlockchange', handlePointerLockChange);
+    window.addEventListener('mousedown', handleMouseDown);
 
     // Click canvas requests Pointer Lock
     const lockCanvas = () => {
@@ -348,6 +364,7 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
       if (!cameraRef.current || !physicsRef.current) return;
 
       const keys = keyboardState.current;
+      const joyVec = joystickVectorRef.current;
       
       // Compute move direction based on camera horizontal plane
       const camDir = new THREE.Vector3();
@@ -362,23 +379,23 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
       let moveZ = 0;
 
       // Sync physical keys or joystick inputs
-      if (keys['w'] || keys['z'] || joystickVector.y < -0.15) {
-        const factor = joystickVector.y < -0.15 ? Math.abs(joystickVector.y) : 1;
+      if (keys['w'] || keys['z'] || joyVec.y < -0.15) {
+        const factor = joyVec.y < -0.15 ? Math.abs(joyVec.y) : 1;
         moveX += camDir.x * factor;
         moveZ += camDir.z * factor;
       }
-      if (keys['s'] || joystickVector.y > 0.15) {
-        const factor = joystickVector.y > 0.15 ? joystickVector.y : 1;
+      if (keys['s'] || joyVec.y > 0.15) {
+        const factor = joyVec.y > 0.15 ? joyVec.y : 1;
         moveX -= camDir.x * factor;
         moveZ -= camDir.z * factor;
       }
-      if (keys['a'] || keys['q'] || joystickVector.x < -0.15) {
-        const factor = joystickVector.x < -0.15 ? Math.abs(joystickVector.x) : 1;
+      if (keys['a'] || keys['q'] || joyVec.x < -0.15) {
+        const factor = joyVec.x < -0.15 ? Math.abs(joyVec.x) : 1;
         moveX -= camRight.x * factor;
         moveZ -= camRight.z * factor;
       }
-      if (keys['d'] || joystickVector.x > 0.15) {
-        const factor = joystickVector.x > 0.15 ? joystickVector.x : 1;
+      if (keys['d'] || joyVec.x > 0.15) {
+        const factor = joyVec.x > 0.15 ? joyVec.x : 1;
         moveX += camRight.x * factor;
         moveZ += camRight.z * factor;
       }
@@ -404,7 +421,7 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
 
       // Fly or Vertical jump handling
       if (isFlying.current) {
-        if (keys[' '] || joystickVector.y < -0.55) {
+        if (keys[' '] || joyVec.y < -0.55) {
           playerVel.current.y = 8.0;
         } else if (keys['shift']) {
           playerVel.current.y = -8.0;
@@ -482,6 +499,7 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mousemove', handleMouseMovement);
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
       
@@ -617,38 +635,39 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
 
   // Touch handlers for virtual joystick
   const handleJoystickStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
     const touch = e.changedTouches[0];
-    // Dynamic base position adjustment for premium play!
-    // Set the joystick center dynamically to this touch position
     const rect = e.currentTarget.getBoundingClientRect();
-    const relativeX = touch.clientX - rect.left;
-    const relativeY = touch.clientY - rect.top;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
     
-    setJoystickCenter({ x: relativeX, y: relativeY });
     setJoystickActive(true);
 
     joystickTouch.current = {
       id: touch.identifier,
-      startX: touch.clientX,
-      startY: touch.clientY,
+      startX: centerX,
+      startY: centerY,
       curX: touch.clientX,
       curY: touch.clientY,
     };
   };
 
   const handleJoystickMove = (e: React.TouchEvent) => {
-    if (!joystickTouch.current || !joystickCenter) return;
+    e.stopPropagation();
+    if (!joystickTouch.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const maxRadius = rect ? rect.width / 2.5 : 45;
+
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
       if (touch.identifier === joystickTouch.current.id) {
         joystickTouch.current.curX = touch.clientX;
         joystickTouch.current.curY = touch.clientY;
 
-        // Compute distance vector from start position (joystick base center)
+        // Compute distance vector from central joystick position
         const dx = touch.clientX - joystickTouch.current.startX;
         const dy = touch.clientY - joystickTouch.current.startY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const maxRadius = 45; // Enhanced virtual joystick radius!
 
         let vx = dx;
         let vy = dy;
@@ -657,18 +676,23 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
           vy = (dy / dist) * maxRadius;
         }
 
-        setJoystickVector({ x: vx / maxRadius, y: vy / maxRadius });
+        const vec = { x: vx / maxRadius, y: vy / maxRadius };
+        setJoystickVector(vec);
+        joystickVectorRef.current = vec;
       }
     }
   };
 
   const handleJoystickEnd = (e: React.TouchEvent) => {
+    e.stopPropagation();
     if (!joystickTouch.current) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
       if (touch.identifier === joystickTouch.current.id) {
         joystickTouch.current = null;
-        setJoystickVector({ x: 0, y: 0 });
+        const vec = { x: 0, y: 0 };
+        setJoystickVector(vec);
+        joystickVectorRef.current = vec;
         setJoystickActive(false);
         setJoystickCenter(null);
       }
@@ -679,11 +703,16 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
   const swipeTouch = useRef<{ id: number; x: number; y: number } | null>(null);
   
   const handleSwipeStart = (e: React.TouchEvent) => {
+    // Avoid rotating screen when touching controls/buttons/ui elements
+    const target = e.target as HTMLElement;
+    if (target && (target.tagName === 'BUTTON' || target.closest('button') || target.closest('.slot') || target.tagName === 'SELECT' || target.tagName === 'INPUT')) {
+      return;
+    }
     // Search the changed touches for a finger placed on the right portion of screen to look/aim around
     for (let i = 0; i < e.changedTouches.length; i++) {
       const touch = e.changedTouches[i];
       // Skip left bottom quadrant (where joystick resides)
-      const isRightSide = touch.clientX > window.innerWidth * 0.4;
+      const isRightSide = touch.clientX > window.innerWidth * 0.35;
       if (isRightSide && !swipeTouch.current) {
         swipeTouch.current = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
         break;
@@ -723,7 +752,8 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
 
   return (
     <div 
-      className="relative w-full h-full select-none"
+      className="relative w-full h-full select-none touch-none"
+      style={{ touchAction: 'none' }}
       onTouchStart={handleSwipeStart}
       onTouchMove={handleSwipeMove}
       onTouchEnd={handleSwipeEnd}
