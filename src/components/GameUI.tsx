@@ -280,8 +280,8 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 font-sans select-none z-35">
       
       {/* TOP HEADER: HUD stats bar, position tracking metrics, active players, and Chat logs toggle button */}
-      <div className="w-full h-1/6 flex justify-between items-start pointer-events-auto">
-        <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-neutral-900/65 border border-white/5 shadow-xl text-neutral-200">
+      <div className="w-full h-1/6 flex justify-between items-start pointer-events-none">
+        <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-neutral-900/65 border border-white/5 shadow-xl text-neutral-200 pointer-events-auto">
           
           {/* Health point meter row */}
           <div className="flex items-center gap-2">
@@ -315,7 +315,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
         </div>
 
         {/* Global info overlay badge */}
-        <div className="flex flex-col items-end gap-1 p-2 rounded-xl bg-neutral-900/65 border border-white/5 text-right font-mono text-xs text-neutral-300 shadow-md">
+        <div className="flex flex-col items-end gap-1 p-2 rounded-xl bg-neutral-900/65 border border-white/5 text-right font-mono text-xs text-neutral-300 shadow-md pointer-events-auto">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-sans text-neutral-400">FPS:</span>
@@ -328,9 +328,9 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
       </div>
 
       {/* CORE INNER ACTIVE GRID CONTAINER: INVENTORY, SHOP, CRAFTERS AND MORE */}
-      <div className="flex-1 w-full max-w-4xl mx-auto flex items-center justify-center p-2 pointer-events-auto">
+      <div className="flex-1 w-full max-w-4xl mx-auto flex items-center justify-center p-2 pointer-events-none">
         {activeTab && (
-          <div className="w-full max-h-[85%] bg-neutral-900/95 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 relative">
+          <div className="w-full max-h-[85%] bg-neutral-900/95 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 relative pointer-events-auto">
             
             {/* Window header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -777,10 +777,10 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
       </div>
 
       {/* BOTTOM CONTROL SYSTEM PANEL: HOTBAR HUD */}
-      <div className="w-full flex flex-col gap-1.5 items-center pb-2 pointer-events-auto">
+      <div className="w-full flex flex-col gap-1.5 items-center pb-2 pointer-events-none">
         
         {/* Navigation panel selectors */}
-        <div className="flex gap-1.5 bg-neutral-950/70 border border-white/10 rounded-full px-3 py-1 text-xs select-none">
+        <div className="flex gap-1.5 bg-neutral-950/70 border border-white/10 rounded-full px-3 py-1 text-xs select-none pointer-events-auto">
           <button 
             id="tab-inventory"
             onClick={() => setActiveTab(activeTab === 'inventory' ? null : 'inventory')}
@@ -856,7 +856,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
         </div>
 
         {/* Hotbar Slots indicator */}
-        <div className="flex gap-1.5 bg-neutral-900/80 border border-white/10 rounded-2xl p-2 shadow-xl">
+        <div className="flex gap-1.5 bg-neutral-900/80 border border-white/10 rounded-2xl p-2 shadow-xl pointer-events-auto">
           {inventory.slice(0, 9).map((item, idx) => (
             <div 
               key={idx}

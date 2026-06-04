@@ -62,6 +62,17 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
   const [joystickCenter, setJoystickCenter] = useState<{ x: number; y: number } | null>(null);
   const [joystickActive, setJoystickActive] = useState(false);
 
+  const mobileControlsRef = useRef(mobileControls);
+  useEffect(() => {
+    mobileControlsRef.current = mobileControls;
+  }, [mobileControls]);
+
+  const creativeModeRef = useRef(creativeMode);
+  useEffect(() => {
+    creativeModeRef.current = creativeMode;
+    isFlying.current = creativeMode;
+  }, [creativeMode]);
+
   const handleVectoredClickRef = useRef<(action: 'break' | 'place') => void>(() => {});
   useEffect(() => {
     handleVectoredClickRef.current = handleVectoredClick;
@@ -237,7 +248,7 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
 
     // Click canvas requests Pointer Lock
     const lockCanvas = () => {
-      if (!mobileControls) {
+      if (!mobileControlsRef.current) {
         renderer.domElement.requestPointerLock();
       }
     };
@@ -253,7 +264,7 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
       }
 
       // Creative Mode Fly Toggle
-      if (e.key.toLowerCase() === 'f' && creativeMode) {
+      if (e.key.toLowerCase() === 'f' && creativeModeRef.current) {
         isFlying.current = !isFlying.current;
         playerVel.current.set(0, 0, 0);
         audioSystem.playPlaceBlock();
@@ -510,7 +521,7 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
         rendererRef.current.dispose();
       }
     };
-  }, [mobileControls]);
+  }, []);
 
   // Click Actions - Placing and Breaking blocks or attacking Mobs!
   const handleVectoredClick = (action: 'break' | 'place') => {
@@ -633,130 +644,181 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
     }
   };
 
-  // Touch handlers for virtual joystick
-  const handleJoystickStart = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    const touch = e.changedTouches[0];
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
+  const joystickRef = useRef<HTMLDivElement>(null);
+
+  // Native multi-touch listeners for Joystick and Swipe Look features
+  // Relying on native event listeners with { passive: false } allows calling e.preventDefault() successfully, which prevents browser scrolling and touch cancels on smartphone displays
+  useEffect(() => {
+    if (!mobileControls) return;
+
+    // 1. JOYSTICK BINDINGS
+    const joystickEl = joystickRef.current;
     
-    setJoystickActive(true);
+    const onJoystickStart = (e: TouchEvent) => {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+      
+      const touch = e.changedTouches[0];
+      if (!joystickEl) return;
+      const rect = joystickEl.getBoundingClientRect();
+      const relativeX = touch.clientX - rect.left;
+      const relativeY = touch.clientY - rect.top;
+      
+      setJoystickCenter({ x: relativeX, y: relativeY });
+      setJoystickActive(true);
 
-    joystickTouch.current = {
-      id: touch.identifier,
-      startX: centerX,
-      startY: centerY,
-      curX: touch.clientX,
-      curY: touch.clientY,
+      joystickTouch.current = {
+        id: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        curX: touch.clientX,
+        curY: touch.clientY,
+      };
     };
-  };
 
-  const handleJoystickMove = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    if (!joystickTouch.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const maxRadius = rect ? rect.width / 2.5 : 45;
+    const onJoystickMove = (e: TouchEvent) => {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+      
+      if (!joystickTouch.current) return;
+      const maxRadius = 40;
 
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      if (touch.identifier === joystickTouch.current.id) {
-        joystickTouch.current.curX = touch.clientX;
-        joystickTouch.current.curY = touch.clientY;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === joystickTouch.current.id) {
+          joystickTouch.current.curX = touch.clientX;
+          joystickTouch.current.curY = touch.clientY;
 
-        // Compute distance vector from central joystick position
-        const dx = touch.clientX - joystickTouch.current.startX;
-        const dy = touch.clientY - joystickTouch.current.startY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+          const dx = touch.clientX - joystickTouch.current.startX;
+          const dy = touch.clientY - joystickTouch.current.startY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
 
-        let vx = dx;
-        let vy = dy;
-        if (dist > maxRadius) {
-          vx = (dx / dist) * maxRadius;
-          vy = (dy / dist) * maxRadius;
+          let vx = dx;
+          let vy = dy;
+          if (dist > maxRadius) {
+            vx = (dx / dist) * maxRadius;
+            vy = (dy / dist) * maxRadius;
+          }
+
+          const vec = { x: vx / maxRadius, y: vy / maxRadius };
+          setJoystickVector(vec);
+          joystickVectorRef.current = vec;
         }
-
-        const vec = { x: vx / maxRadius, y: vy / maxRadius };
-        setJoystickVector(vec);
-        joystickVectorRef.current = vec;
       }
-    }
-  };
+    };
 
-  const handleJoystickEnd = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    if (!joystickTouch.current) return;
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      if (touch.identifier === joystickTouch.current.id) {
-        joystickTouch.current = null;
-        const vec = { x: 0, y: 0 };
-        setJoystickVector(vec);
-        joystickVectorRef.current = vec;
-        setJoystickActive(false);
-        setJoystickCenter(null);
+    const onJoystickEnd = (e: TouchEvent) => {
+      e.stopPropagation();
+      if (!joystickTouch.current) return;
+      
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === joystickTouch.current.id) {
+          joystickTouch.current = null;
+          const vec = { x: 0, y: 0 };
+          setJoystickVector(vec);
+          joystickVectorRef.current = vec;
+          setJoystickActive(false);
+          setJoystickCenter(null);
+        }
       }
-    }
-  };
+    };
 
-  // Handle Dynamic Swipe-gesture looking (optimized for simultaneous look during movement!)
-  const swipeTouch = useRef<{ id: number; x: number; y: number } | null>(null);
-  
-  const handleSwipeStart = (e: React.TouchEvent) => {
-    // Avoid rotating screen when touching controls/buttons/ui elements
-    const target = e.target as HTMLElement;
-    if (target && (target.tagName === 'BUTTON' || target.closest('button') || target.closest('.slot') || target.tagName === 'SELECT' || target.tagName === 'INPUT')) {
-      return;
+    if (joystickEl) {
+      joystickEl.addEventListener('touchstart', onJoystickStart, { passive: false });
+      joystickEl.addEventListener('touchmove', onJoystickMove, { passive: false });
+      joystickEl.addEventListener('touchend', onJoystickEnd, { passive: false });
+      joystickEl.addEventListener('touchcancel', onJoystickEnd, { passive: false });
     }
-    // Search the changed touches for a finger placed on the right portion of screen to look/aim around
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      // Skip left bottom quadrant (where joystick resides)
-      const isRightSide = touch.clientX > window.innerWidth * 0.35;
-      if (isRightSide && !swipeTouch.current) {
-        swipeTouch.current = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
-        break;
+
+    // 2. GLOBAL SWIPE/LOOK BINDINGS
+    const swipeTouchState = { id: -1, x: 0, y: 0 };
+
+    const handleNativeSwipeStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      // Skip if dragging interactive elements like hotbar slots or settings buttons
+      if (
+        target &&
+        (target.tagName === 'BUTTON' ||
+          target.closest('button') ||
+          target.closest('.slot') ||
+          target.tagName === 'SELECT' ||
+          target.tagName === 'INPUT' ||
+          target.closest('#joystick') ||
+          joystickEl?.contains(target))
+      ) {
+        return;
       }
-    }
-  };
 
-  const handleSwipeMove = (e: React.TouchEvent) => {
-    if (!swipeTouch.current) return;
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      if (touch.identifier === swipeTouch.current.id) {
-        const dx = touch.clientX - swipeTouch.current.x;
-        const dy = touch.clientY - swipeTouch.current.y;
-        swipeTouch.current = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
-
-        // 0.005 sensitivity is standard on mobile displays
-        const sensitivity = 0.005;
-        playerRot.current.yaw -= dx * sensitivity;
-        playerRot.current.pitch -= dy * sensitivity;
-        playerRot.current.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, playerRot.current.pitch));
-        break;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        const isRightSide = touch.clientX > window.innerWidth * 0.35;
+        if (isRightSide && swipeTouchState.id === -1) {
+          swipeTouchState.id = touch.identifier;
+          swipeTouchState.x = touch.clientX;
+          swipeTouchState.y = touch.clientY;
+          break;
+        }
       }
-    }
-  };
+    };
 
-  const handleSwipeEnd = (e: React.TouchEvent) => {
-    if (!swipeTouch.current) return;
-    for (let i = 0; i < e.changedTouches.length; i++) {
-      const touch = e.changedTouches[i];
-      if (touch.identifier === swipeTouch.current.id) {
-        swipeTouch.current = null;
-        break;
+    const handleNativeSwipeMove = (e: TouchEvent) => {
+      if (swipeTouchState.id === -1) return;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === swipeTouchState.id) {
+          if (e.cancelable) e.preventDefault(); // Lock mobile panning gestures
+          
+          const dx = touch.clientX - swipeTouchState.x;
+          const dy = touch.clientY - swipeTouchState.y;
+          
+          swipeTouchState.x = touch.clientX;
+          swipeTouchState.y = touch.clientY;
+
+          const sensitivity = 0.005;
+          playerRot.current.yaw -= dx * sensitivity;
+          playerRot.current.pitch -= dy * sensitivity;
+          playerRot.current.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, playerRot.current.pitch));
+          break;
+        }
       }
-    }
-  };
+    };
+
+    const handleNativeSwipeEnd = (e: TouchEvent) => {
+      if (swipeTouchState.id === -1) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === swipeTouchState.id) {
+          swipeTouchState.id = -1;
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('touchstart', handleNativeSwipeStart, { passive: true });
+    window.addEventListener('touchmove', handleNativeSwipeMove, { passive: false });
+    window.addEventListener('touchend', handleNativeSwipeEnd, { passive: true });
+    window.addEventListener('touchcancel', handleNativeSwipeEnd, { passive: true });
+
+    return () => {
+      if (joystickEl) {
+        joystickEl.removeEventListener('touchstart', onJoystickStart);
+        joystickEl.removeEventListener('touchmove', onJoystickMove);
+        joystickEl.removeEventListener('touchend', onJoystickEnd);
+        joystickEl.removeEventListener('touchcancel', onJoystickEnd);
+      }
+      window.removeEventListener('touchstart', handleNativeSwipeStart);
+      window.removeEventListener('touchmove', handleNativeSwipeMove);
+      window.removeEventListener('touchend', handleNativeSwipeEnd);
+      window.removeEventListener('touchcancel', handleNativeSwipeEnd);
+    };
+  }, [mobileControls]);
 
   return (
     <div 
       className="relative w-full h-full select-none touch-none"
       style={{ touchAction: 'none' }}
-      onTouchStart={handleSwipeStart}
-      onTouchMove={handleSwipeMove}
-      onTouchEnd={handleSwipeEnd}
     >
       {/* 3D WebGL element */}
       <div id="game-three-canvas" ref={containerRef} className="w-full h-full" />
@@ -816,11 +878,10 @@ export default function GameCanvas({ onFpsUpdate, onCoordinatesUpdate, mobileCon
           <div className="w-full flex items-end justify-between select-none">
             {/* Left Joystick - dynamic repositioning within this zone for active gameplay comfort */}
             <div 
+              ref={joystickRef}
+              id="joystick"
               className="w-48 h-48 rounded-3xl bg-neutral-900/10 border-2 border-dashed border-white/5 backdrop-blur-xs flex items-center justify-center relative pointer-events-auto shadow-inner select-none"
               style={{ touchAction: 'none' }}
-              onTouchStart={handleJoystickStart}
-              onTouchMove={handleJoystickMove}
-              onTouchEnd={handleJoystickEnd}
             >
               {/* Subtle indicator of touch zone */}
               <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] uppercase font-mono tracking-wider text-white/20 pointer-events-none">Vùng Joystick ảo</span>
