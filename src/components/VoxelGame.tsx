@@ -380,9 +380,12 @@ export default function VoxelGame() {
         biome: optsRef.current.biome,
         bagItems: bagItems,
         hotbar: hotbar,
-        equippedWpnId: playerRef.current.wpn ? playerRef.current.wpn.id : null
+        equippedWpnId: playerRef.current.wpn ? playerRef.current.wpn.id : null,
+        worldMods: chunkMgrRef.current?.mods || {}
       }));
-    } catch (e) { }
+    } catch (e) {
+      console.warn('Could not save game data:', e);
+    }
   };
 
   /* ─── Read Url Invite Parameters ─── */
@@ -473,6 +476,9 @@ export default function VoxelGame() {
         if (d.equippedWpnId && ITM[d.equippedWpnId]) {
           player.wpn = ITM[d.equippedWpnId];
           setEquippedWpn(player.wpn);
+        }
+        if (d.worldMods && d.seed === optsRef.current.seed && d.biome === optsRef.current.biome) {
+          cmgr.mods = d.worldMods;
         }
       }
     } catch (err) { }
@@ -1705,42 +1711,59 @@ export default function VoxelGame() {
       {isPlaying && (
         <div id="hud" className="on font-sans">
           {/* Top diagnostic panel bar */}
-          <div className="tbar">
-            <div className="pill select-none">
-              <span className="dot animate-pulse"></span>
-              <span>FPS {fps}</span>·<span>{chunkCount}c Chunks</span>
+          <div className="tbar flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="pill select-none">
+                <span className="dot animate-pulse"></span>
+                <span>FPS {fps}</span><span className="hidden sm:inline">· {chunkCount}c Chunks</span>
+              </div>
+              <div className="pill select-none font-mono font-medium hidden sm:flex">
+                📍 {coordsText}
+              </div>
             </div>
-            <div className="pill select-none font-mono font-medium">
-              📍 {coordsText}
+            
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div
+                className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
+                  showChat ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400' : ''
+                }`}
+                onClick={() => {
+                  setShowChat(!showChat);
+                  synth.playPlace();
+                }}
+              >
+                💬 CHAT {chatLogs.length > 1 ? `(${chatLogs.length - 1})` : ''}
+              </div>
+              
+              <div
+                id="invBtn2"
+                className="pill pointer-events-auto cursor-pointer font-bold active:scale-95 bg-slate-800"
+                onClick={() => {
+                  setInventoryActive(prev => !prev);
+                  setShopActive(false);
+                }}
+              >
+                🎒 TÚI ĐỒ (E)
+              </div>
+
+              <button
+                type="button"
+                className="pill cursor-pointer select-none font-bold active:scale-95 bg-emerald-600 border border-emerald-500 text-white hover:bg-emerald-400 hidden sm:flex"
+                onClick={() => {
+                  copyInviteLink();
+                  synth.playPlace();
+                }}
+              >
+                🔗 MỜI BẠN
+              </button>
+              <button
+                type="button"
+                className="pill cursor-pointer select-none font-bold active:scale-95 bg-slate-900 border border-slate-700 hidden sm:flex"
+                onClick={toggleFullscreen}
+              >
+                🖥️ TOÀN MÀN HÌNH
+              </button>
             </div>
-            <div
-              className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
-                showChat ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400' : ''
-              }`}
-              onClick={() => {
-                setShowChat(!showChat);
-                synth.playPlace();
-              }}
-            >
-              💬 CHAT {chatLogs.length > 1 ? `(${chatLogs.length - 1})` : ''}
-            </div>
-            <button
-              type="button"
-              className="pill cursor-pointer select-none font-bold active:scale-95 bg-emerald-600 border border-emerald-500 text-white hover:bg-emerald-400"
-              onClick={() => {
-                copyInviteLink();
-                synth.playPlace();
-              }}
-            >
-              🔗 MỜI BẠN
-            </button>
-            <button
-              type="button"
-              className="pill cursor-pointer select-none font-bold active:scale-95 bg-slate-900 border border-slate-700"
-              onClick={toggleFullscreen}
-            >
-              🖥️ TOÀN MÀN HÌNH
-            </button>
           </div>
 
           {/* --- Multiplayer Immersive Kênh Chat Overlay --- */}
@@ -1845,7 +1868,7 @@ export default function VoxelGame() {
           </span>
           
           {/* Circular Minimap Overlay */}
-          <div className="absolute top-4 left-4 z-10 w-28 h-28 rounded-full overflow-hidden border-2 border-slate-700/80 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-slate-900/60 backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity">
+          <div className="absolute top-16 left-4 z-10 w-28 h-28 rounded-full overflow-hidden border-2 border-slate-700/80 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-slate-900/60 backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity hidden sm:block">
             <canvas ref={minimapCanvasRef} width={100} height={100} className="w-full h-full [image-rendering:pixelated]" />
             <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-sm shadow-red-500/50"></div>
             {/* Compass labels */}
@@ -1873,13 +1896,13 @@ export default function VoxelGame() {
           <div id="klog"></div>
 
           {/* Status attribute bars (HP, Hunger, XP) */}
+          {equippedWpn && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-[140px] flex items-center justify-center p-1 px-3 bg-slate-900/80 border border-amber-500/50 rounded drop-shadow-md overflow-visible pointer-events-none">
+              <span className="text-xl leading-none">{equippedWpn.e}</span>
+              <span className="ml-2 font-bold text-[10px] text-amber-400 font-mono">{equippedWpn.n} (Dmg: {equippedWpn.dmg})</span>
+            </div>
+          )}
           <div className="bars select-none text-[8px] font-mono">
-            {equippedWpn && (
-              <div className="bar relative flex items-center justify-center p-1 bg-slate-900/80 border border-amber-500/50 rounded drop-shadow-md mb-2 overflow-visible">
-                 <span className="text-xl leading-none">{equippedWpn.e}</span>
-                 <span className="ml-2 font-bold text-[10px] text-amber-400">{equippedWpn.n} (Dmg: {equippedWpn.dmg})</span>
-              </div>
-            )}
             {/* Health Bar (Heart) */}
             <div className="bar hp">
               <div style={{ width: `${(hp / mhp) * 100}%` }} />
@@ -1973,39 +1996,9 @@ export default function VoxelGame() {
             </div>
           </div>
 
-          {/* Bottom paddle bars triggers for hand interaction */}
-          <div id="bpRow" className="mob select-none">
-            <div
-              className="bpb brk"
-              id="bpBreak"
-              onPointerDown={(e) => { e.preventDefault(); bindTactileAction('break', true, 'bpBreak'); }}
-              onPointerUp={(e) => { e.preventDefault(); bindTactileAction('break', false, 'bpBreak'); }}
-              onPointerCancel={() => bindTactileAction('break', false, 'bpBreak')}
-            >
-              ✊ PHÁ KHỐI
-            </div>
-            <div
-              className="bpb plc"
-              id="bpPlace"
-              onPointerDown={(e) => { e.preventDefault(); bindTactileAction('place', true, 'bpPlace'); }}
-              onPointerUp={(e) => { e.preventDefault(); bindTactileAction('place', false, 'bpPlace'); }}
-              onPointerCancel={() => bindTactileAction('place', false, 'bpPlace')}
-            >
-              🖐 ĐẶT KHỐI
-            </div>
-          </div>
 
-          {/* Quick Backpack tab button trigger */}
-          <div
-            id="invBtn2"
-            className="pill mob pointer-events-auto cursor-pointer z-20 font-bold"
-            onClick={() => {
-              setInventoryActive(prev => !prev);
-              setShopActive(false);
-            }}
-          >
-            🎒 Túi Đồ (E)
-          </div>
+
+
         </div>
       )}
 
@@ -2080,6 +2073,31 @@ export default function VoxelGame() {
                       </div>
                       <div className="cn">∞</div>
                       <div className="lb">{bDef.n}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : activeTab === 'items' || activeTab === 'food' ? (
+              <div className="ig">
+                {Object.entries(bagItems).filter(([id, count]) => {
+                  const it = ITM[id];
+                  if (!it || count <= 0) return false;
+                  if (activeTab === 'items' && it.t !== 'food' && it.t !== 'potion') return true;
+                  if (activeTab === 'food' && (it.t === 'food' || it.t === 'potion')) return true;
+                  return false;
+                }).map(([id, count]) => {
+                  const it = ITM[id];
+                  return (
+                    <div
+                      key={id}
+                      className="slot hover:border-emerald-400 select-none cursor-pointer"
+                      onClick={() => consumeItem(id)}
+                    >
+                      <div className="bi select-none text-2xl flex items-center justify-center">
+                        {it.e}
+                      </div>
+                      <div className="cn">{count}</div>
+                      <div className="lb">{it.n}</div>
                     </div>
                   );
                 })}

@@ -276,11 +276,13 @@ export class CM {
   map: Map<string, Chunk>;
   mat: THREE.MeshLambertMaterial;
   tmat: THREE.MeshLambertMaterial;
+  mods: Record<string, Record<string, number>>;
 
   constructor(scene: THREE.Scene, wg: WGen) {
     this.scene = scene;
     this.wg = wg;
     this.map = new Map();
+    this.mods = {};
     this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.tmat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.7, depthWrite: false });
   }
@@ -327,6 +329,16 @@ export class CM {
         }
       }
     }
+    
+    // Apply mods AFTER standard generation
+    const cm = this.mods[this.key(cx, cz)];
+    if (cm) {
+      for (const key in cm) {
+        const [lx, ly, lz] = key.split(',').map(Number);
+        ck.set(lx, ly, lz, cm[key]);
+      }
+    }
+
     ck.gen = true;
   }
 
@@ -461,9 +473,12 @@ export class CM {
     if (wy < 0 || wy >= CH) return;
     const cx = Math.floor(wx / CW);
     const cz = Math.floor(wz / CW);
-    const c = this.gc(cx, cz);
+    const k = this.key(cx, cz);
+    if (!this.mods[k]) this.mods[k] = {};
     const lx = ((wx % CW) + CW) % CW;
     const lz2 = ((wz % CW) + CW) % CW;
+    this.mods[k][`${lx},${wy},${lz2}`] = v;
+    const c = this.gc(cx, cz);
     c.set(lx, wy, lz2, v);
 
     const mk = (x: number, z: number) => {
