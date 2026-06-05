@@ -196,6 +196,7 @@ export default function VoxelGame() {
   const [hunger, setHunger] = useState(20);
   const [xpPercent, setXpPercent] = useState(0);
   const [playerLevel, setPlayerLevel] = useState(1);
+  const [equippedWpn, setEquippedWpn] = useState<any>(null);
   const [currentBadge, setCurrentBadge] = useState('🎨 CREATIVE');
 
   /* ─── Inventory / Shop states ─── */
@@ -378,7 +379,8 @@ export default function VoxelGame() {
         seed: optsRef.current.seed,
         biome: optsRef.current.biome,
         bagItems: bagItems,
-        hotbar: hotbar
+        hotbar: hotbar,
+        equippedWpnId: playerRef.current.wpn ? playerRef.current.wpn.id : null
       }));
     } catch (e) { }
   };
@@ -468,6 +470,10 @@ export default function VoxelGame() {
         }
         if (d.bagItems) setBagItems(d.bagItems);
         if (d.hotbar) setHotbar(d.hotbar);
+        if (d.equippedWpnId && ITM[d.equippedWpnId]) {
+          player.wpn = ITM[d.equippedWpnId];
+          setEquippedWpn(player.wpn);
+        }
       }
     } catch (err) { }
 
@@ -813,7 +819,6 @@ export default function VoxelGame() {
             jy: tInst.jy
           };
 
-          pInst.fly = optsRef.current.mode === 'creative';
           pInst.upd(dt, instInputs, cInst, optsRef.current.mode, (src) => {
             setIsDead(true);
             setDeadMsg(src);
@@ -1350,25 +1355,35 @@ export default function VoxelGame() {
     if (it.t === 'food') {
       p.hunger = Math.min(20, p.hunger + (it.hg || 0));
       if (it.hl) p.heal(it.hl);
+      remBagItem(id, 1);
+      triggerToast(`🍖 Đã dùng ${it.e} ${it.n}`);
     } else if (it.t === 'potion') {
       if (it.hl) p.heal(it.hl);
       if (it.spd) {
         p.spdB = it.spd;
         triggerToast(`💊 Nhận hiệu ứng Tốc Độ +${it.spd}!`);
         setTimeout(() => { if (playerRef.current) playerRef.current.spdB = 0; }, 15000);
+      } else {
+        triggerToast(`💊 Đã dùng ${it.e} ${it.n}`);
       }
+      remBagItem(id, 1);
     } else if (it.t === 'weapon') {
       p.wpn = it;
+      setEquippedWpn(it);
+      triggerToast(`⚔️ Đã trang bị ${it.e} ${it.n}! (+Lực chiến)`);
+      setInventoryActive(false);
     } else if (it.t === 'armor') {
       if (it.def) p.def = it.def;
       if (it.spd) p.spdB = it.spd;
+      triggerToast(`🛡️ Đã mặc ${it.e} ${it.n} thành công!`);
     } else if (it.t === 'special' && it.fly) {
-      p.fly = true;
-      triggerToast('👑 Đã trang bị Cánh Phượng hoàng: Bay BẬT!');
+      p.fly = !p.fly;
+      triggerToast(`👑 Cánh Phượng Hoàng: Bay ${p.fly ? 'BẬT 🦅' : 'TẮT'}!`);
+      setInventoryActive(false);
+    } else if (it.t === 'tool') {
+      triggerToast(`🔧 Đã cầm ${it.e} ${it.n} trên tay!`);
+      setInventoryActive(false);
     }
-
-    remBagItem(id, 1);
-    triggerToast(`Đã dùng ${it.e} ${it.n}`);
   };
 
   /* ─── Shop Checkouts buy actions ─── */
@@ -1613,6 +1628,7 @@ export default function VoxelGame() {
                   className={`mc2 ${opts.mode === 'creative' ? 's' : ''}`}
                   onClick={() => {
                     setOpts(prev => ({ ...prev, mode: 'creative' }));
+                    if (playerRef.current) playerRef.current.fly = true;
                     setCurrentBadge('🎨 CREATIVE');
                   }}
                 >
@@ -1625,6 +1641,7 @@ export default function VoxelGame() {
                   className={`mc2 ${opts.mode === 'survival' ? 's' : ''}`}
                   onClick={() => {
                     setOpts(prev => ({ ...prev, mode: 'survival' }));
+                    if (playerRef.current) playerRef.current.fly = false;
                     setCurrentBadge('⚔️ SURVIVAL');
                   }}
                 >
@@ -1637,6 +1654,7 @@ export default function VoxelGame() {
                   className={`mc2 ${opts.mode === 'adventure' ? 's' : ''}`}
                   onClick={() => {
                     setOpts(prev => ({ ...prev, mode: 'adventure' }));
+                    if (playerRef.current) playerRef.current.fly = false;
                     setCurrentBadge('🗺️ ADVENTURE');
                   }}
                 >
@@ -1856,6 +1874,12 @@ export default function VoxelGame() {
 
           {/* Status attribute bars (HP, Hunger, XP) */}
           <div className="bars select-none text-[8px] font-mono">
+            {equippedWpn && (
+              <div className="bar relative flex items-center justify-center p-1 bg-slate-900/80 border border-amber-500/50 rounded drop-shadow-md mb-2 overflow-visible">
+                 <span className="text-xl leading-none">{equippedWpn.e}</span>
+                 <span className="ml-2 font-bold text-[10px] text-amber-400">{equippedWpn.n} (Dmg: {equippedWpn.dmg})</span>
+              </div>
+            )}
             {/* Health Bar (Heart) */}
             <div className="bar hp">
               <div style={{ width: `${(hp / mhp) * 100}%` }} />
