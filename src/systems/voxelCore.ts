@@ -53,8 +53,11 @@ export interface ItemDef {
 export const ITM: Record<string, ItemDef> = {
   sw1: { id: 'sw1', n: 'Kiếm Gỗ', e: '🗡️', dmg: 3, t: 'weapon' },
   sw2: { id: 'sw2', n: 'Kiếm Đá', e: '⚔️', dmg: 5, t: 'weapon' },
+  knife: { id: 'knife', n: 'Dao Thép', e: '🔪', dmg: 6, t: 'weapon' },
   sw3: { id: 'sw3', n: 'Kiếm Vàng', e: '🔱', dmg: 7, t: 'weapon' },
   sw4: { id: 'sw4', n: 'Kiếm KCương', e: '💎⚔️', dmg: 10, t: 'weapon' },
+  pistol: { id: 'pistol', n: 'Súng Lục 🔫', e: '🔫', dmg: 14, t: 'weapon' },
+  rifle: { id: 'rifle', n: 'Súng Trường ︻╦╤─', e: '🔫︻╦╤─', dmg: 22, t: 'weapon' },
   axe: { id: 'axe', n: 'Rìu', e: '🪓', dmg: 4, t: 'tool' },
   pick: { id: 'pick', n: 'Cuốc', e: '⛏️', dmg: 2, t: 'tool' },
   shield: { id: 'shield', n: 'Khiên', e: '🛡️', def: 3, t: 'armor' },
@@ -74,7 +77,15 @@ export interface ShopItem {
 }
 
 export const SHOP: Record<string, ShopItem[]> = {
-  weapons: [{ id: 'sw1', p: 10 }, { id: 'sw2', p: 30 }, { id: 'sw3', p: 80 }, { id: 'sw4', p: 200 }],
+  weapons: [
+    { id: 'sw1', p: 10 },
+    { id: 'sw2', p: 30 },
+    { id: 'knife', p: 50 },
+    { id: 'sw3', p: 80 },
+    { id: 'sw4', p: 150 },
+    { id: 'pistol', p: 200 },
+    { id: 'rifle', p: 350 }
+  ],
   tools: [{ id: 'axe', p: 20 }, { id: 'pick', p: 25 }],
   food: [{ id: 'bread', p: 8 }, { id: 'apple', p: 6 }, { id: 'meat', p: 15 }, { id: 'pot_hp', p: 25 }, { id: 'pot_spd', p: 35 }],
   special: [{ id: 'shield', p: 60 }, { id: 'helm', p: 70 }, { id: 'boots', p: 55 }, { id: 'wings', p: 300 }],
@@ -441,13 +452,15 @@ export class CM {
   }
 
   wGet(wx: number, wy: number, wz: number): number {
-    const c = this.map.get(this.key(~~(wx / CW), ~~(wz / CW)));
+    if (wy < 0 || wy >= CH) return 0;
+    const c = this.map.get(this.key(Math.floor(wx / CW), Math.floor(wz / CW)));
     return c ? c.get(((wx % CW) + CW) % CW, wy, ((wz % CW) + CW) % CW) : 0;
   }
 
   wSet(wx: number, wy: number, wz: number, v: number): void {
-    const cx = ~~(wx / CW);
-    const cz = ~~(wz / CW);
+    if (wy < 0 || wy >= CH) return;
+    const cx = Math.floor(wx / CW);
+    const cz = Math.floor(wz / CW);
     const c = this.gc(cx, cz);
     const lx = ((wx % CW) + CW) % CW;
     const lz2 = ((wz % CW) + CW) % CW;
@@ -501,8 +514,8 @@ export class Player {
     this.vel = new THREE.Vector3();
     this.onG = false;
     this.fly = true;
-    this.spd = 6;
-    this.fspd = 14;
+    this.spd = 4;
+    this.fspd = 10;
     this.eyeH = 1.65;
     this.r = 0.35;
     this.h = 1.8;
@@ -618,9 +631,9 @@ export class Player {
   }
 
   col(world: CM, x: number, y: number, z: number): boolean {
-    for (let bx = ~~(x - this.r); bx <= ~~(x + this.r); bx++) {
-      for (let bz = ~~(z - this.r); bz <= ~~(z + this.r); bz++) {
-        for (let by = ~~y; by <= ~~(y + this.h); by++) {
+    for (let bx = Math.floor(x - this.r); bx <= Math.floor(x + this.r); bx++) {
+      for (let bz = Math.floor(z - this.r); bz <= Math.floor(z + this.r); bz++) {
+        for (let by = Math.floor(y); by <= Math.floor(y + this.h); by++) {
           const b = world.wGet(bx, by, bz);
           if (b && BLK[b] && BLK[b].s) return true;
         }

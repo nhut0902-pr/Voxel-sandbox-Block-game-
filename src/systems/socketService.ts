@@ -12,7 +12,17 @@ export class SocketService {
     return this.instance;
   }
 
-  public connect(playerName: string, x: number, y: number, z: number, rotY: number, room: string): void {
+  public connect(
+    playerName: string, 
+    x: number, 
+    y: number, 
+    z: number, 
+    rotY: number, 
+    room: string,
+    skinColor?: string,
+    shirtColor?: string,
+    pantsColor?: string
+  ): void {
     if (this.socket) {
       this.socket.disconnect();
     }
@@ -35,6 +45,9 @@ export class SocketService {
         z,
         rotY,
         room: room || 'lobby',
+        skinColor,
+        shirtColor,
+        pantsColor
       });
     });
 

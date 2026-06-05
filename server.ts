@@ -25,9 +25,20 @@ async function startServer() {
     console.log(`🔌 Player connected: ${socket.id}`);
 
     // Join shared room
-    socket.on('player:join', ({ name, x, y, z, rotY, room }) => {
+    socket.on('player:join', ({ name, x, y, z, rotY, room, skinColor, shirtColor, pantsColor }) => {
       socket.join(room || 'lobby');
-      players.set(socket.id, { id: socket.id, name, x, y, z, rotY, room: room || 'lobby' });
+      players.set(socket.id, { 
+        id: socket.id, 
+        name, 
+        x, 
+        y, 
+        z, 
+        rotY, 
+        room: room || 'lobby',
+        skinColor,
+        shirtColor,
+        pantsColor
+      });
 
       console.log(`👋 Player ${name} joined room ${room || 'lobby'}`);
 
@@ -39,6 +50,9 @@ async function startServer() {
         y,
         z,
         rotY,
+        skinColor,
+        shirtColor,
+        pantsColor
       });
 
       // Synchronize list of existing players to the joiner
@@ -59,6 +73,9 @@ async function startServer() {
         p.y = data.y;
         p.z = data.z;
         p.rotY = data.rotY;
+        if (data.skinColor) p.skinColor = data.skinColor;
+        if (data.shirtColor) p.shirtColor = data.shirtColor;
+        if (data.pantsColor) p.pantsColor = data.pantsColor;
 
         // Broadcast to other players in room
         socket.to(p.room).emit('player:moved', {
@@ -67,6 +84,9 @@ async function startServer() {
           y: data.y,
           z: data.z,
           rotY: data.rotY,
+          skinColor: p.skinColor,
+          shirtColor: p.shirtColor,
+          pantsColor: p.pantsColor,
         });
       }
     });

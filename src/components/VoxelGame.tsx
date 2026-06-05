@@ -29,7 +29,126 @@ interface GameOptions {
   biome: string;
   botCount: string;
   room: string;
+  skinColor: string;
+  shirtColor: string;
+  pantsColor: string;
 }
+
+interface CraftingRecipe {
+  resultId: string;
+  resultType: 'block' | 'item';
+  resultName: string;
+  resultEmoji: string;
+  count: number;
+  ingredients: { id: string; type: 'block' | 'item'; name: string; req: number }[];
+}
+
+const CRAFTING_RECIPES: CraftingRecipe[] = [
+  {
+    resultId: 'sw1',
+    resultType: 'item',
+    resultName: 'Kiếm Gỗ',
+    resultEmoji: '🗡️',
+    count: 1,
+    ingredients: [{ id: '6', type: 'block', name: 'Gỗ Tròn', req: 3 }]
+  },
+  {
+    resultId: 'sw2',
+    resultType: 'item',
+    resultName: 'Kiếm Đá',
+    resultEmoji: '⚔️',
+    count: 1,
+    ingredients: [
+      { id: '6', type: 'block', name: 'Gỗ Tròn', req: 1 },
+      { id: '3', type: 'block', name: 'Đá Cuội', req: 3 }
+    ]
+  },
+  {
+    resultId: 'knife',
+    resultType: 'item',
+    resultName: 'Dao Thép',
+    resultEmoji: '🔪',
+    count: 1,
+    ingredients: [
+      { id: '6', type: 'block', name: 'Gỗ Tròn', req: 1 },
+      { id: '3', type: 'block', name: 'Đá Cuội', req: 2 },
+      { id: '11', type: 'block', name: 'Hắc Diện Thạch', req: 1 }
+    ]
+  },
+  {
+    resultId: 'sw4',
+    resultType: 'item',
+    resultName: 'Kiếm Kim Cương',
+    resultEmoji: '💎⚔️',
+    count: 1,
+    ingredients: [
+      { id: '15', type: 'block', name: 'Kim Cương', req: 2 },
+      { id: '6', type: 'block', name: 'Gỗ Tròn', req: 1 }
+    ]
+  },
+  {
+    resultId: 'pistol',
+    resultType: 'item',
+    resultName: 'Súng Lục Sát Thương Cao',
+    resultEmoji: '🔫',
+    count: 1,
+    ingredients: [
+      { id: '11', type: 'block', name: 'Hắc Diện Thạch', req: 2 },
+      { id: '3', type: 'block', name: 'Đá Cuội', req: 4 }
+    ]
+  },
+  {
+    resultId: 'rifle',
+    resultType: 'item',
+    resultName: 'Súng Trường Liên Thanh',
+    resultEmoji: '🔫︻╦╤─',
+    count: 1,
+    ingredients: [
+      { id: 'pistol', type: 'item', name: 'Súng Lục', req: 1 },
+      { id: '11', type: 'block', name: 'Hắc Diện Thạch', req: 3 },
+      { id: '14', type: 'block', name: 'Quặng Vàng', req: 4 }
+    ]
+  },
+  {
+    resultId: 'bread',
+    resultType: 'item',
+    resultName: 'Bánh Mì Thơm Ngon',
+    resultEmoji: '🍞',
+    count: 2,
+    ingredients: [{ id: '1', type: 'block', name: 'Cỏ Xanh', req: 4 }]
+  },
+  {
+    resultId: 'wings',
+    resultType: 'item',
+    resultName: 'Cánh Phượng Hoàng',
+    resultEmoji: '🪽',
+    count: 1,
+    ingredients: [
+      { id: '12', type: 'block', name: 'Hoa Anh Đào', req: 6 },
+      { id: '10', type: 'block', name: 'Mảnh Kính', req: 3 }
+    ]
+  },
+  {
+    resultId: 'pot_hp',
+    resultType: 'item',
+    resultName: 'Quả Cầu Hồi Máu',
+    resultEmoji: '🧪',
+    count: 1,
+    ingredients: [
+      { id: '7', type: 'block', name: 'Lá Cây', req: 5 }
+    ]
+  },
+  {
+    resultId: 'pot_spd',
+    resultType: 'item',
+    resultName: 'Băng Dược Tăng Tốc',
+    resultEmoji: '⚗️',
+    count: 1,
+    ingredients: [
+      { id: '8', type: 'block', name: 'Tuyết', req: 4 }
+    ]
+  }
+];
 
 export default function VoxelGame() {
   /* ─── UI Router states ─── */
@@ -40,8 +159,16 @@ export default function VoxelGame() {
     mode: 'creative',
     biome: 'plains',
     botCount: '3',
-    room: 'lobby'
+    room: 'lobby',
+    skinColor: '#dbcca0',
+    shirtColor: '#3b82f6',
+    pantsColor: '#1d4ed8'
   });
+
+  const optsRef = useRef(opts);
+  useEffect(() => {
+    optsRef.current = opts;
+  }, [opts]);
 
   /* ─── Chat system states ─── */
   const [chatLogs, setChatLogs] = useState<{ sender: string; text: string }[]>([
@@ -54,6 +181,7 @@ export default function VoxelGame() {
   /* ─── Position tracking for multiplayer sync ─── */
   const lastEmitPos = useRef<THREE.Vector3>(new THREE.Vector3());
   const lastEmitYaw = useRef<number>(0);
+  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
 
   /* ─── HUD Sync React states ─── */
   const [fps, setFps] = useState(0);
@@ -75,6 +203,7 @@ export default function VoxelGame() {
   const [shopActive, setShopActive] = useState(false);
   const [isDead, setIsDead] = useState(false);
   const [deadMsg, setDeadMsg] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -116,7 +245,7 @@ export default function VoxelGame() {
       });
   };
   
-  const [activeTab, setActiveTab] = useState<'blocks' | 'items' | 'food'>('blocks');
+  const [activeTab, setActiveTab] = useState<'blocks' | 'items' | 'food' | 'clothing' | 'crafting'>('blocks');
   const [activeShopTab, setActiveShopTab] = useState('weapons');
   
   const [hotbar, setHotbar] = useState<Array<{ id: number; n: number }>>([
@@ -133,6 +262,17 @@ export default function VoxelGame() {
   const [selIndex, setSelIndex] = useState(0);
   const [bagItems, setBagItems] = useState<Record<string, number>>({});
   
+  const hotbarRef = useRef(hotbar);
+  const selIndexRef = useRef(selIndex);
+
+  useEffect(() => {
+    hotbarRef.current = hotbar;
+  }, [hotbar]);
+
+  useEffect(() => {
+    selIndexRef.current = selIndex;
+  }, [selIndex]);
+
   // Notification Toast state
   const [toastText, setToastText] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
@@ -202,6 +342,28 @@ export default function VoxelGame() {
     });
   };
 
+  const craftItem = (recipe: typeof CRAFTING_RECIPES[0]) => {
+    const missing = recipe.ingredients.find((ing) => {
+      const owned = bagItems[ing.id] || 0;
+      return owned < ing.req;
+    });
+
+    if (missing) {
+      triggerToast(`❌ Thiếu nguyên liệu! Cần thêm ${missing.req - (bagItems[missing.id] || 0)} ${missing.name}`);
+      return;
+    }
+
+    // Deduct materials
+    recipe.ingredients.forEach((ing) => {
+      remBagItem(ing.id, ing.req);
+    });
+
+    // Credit output item
+    addBagItem(recipe.resultId, recipe.count);
+    synth.playPlace();
+    triggerToast(`🎉 Chế tạo thành công ${recipe.count}x ${recipe.resultEmoji} ${recipe.resultName}!`);
+  };
+
   /* ─── Auto-Saver ─── */
   const saveGameData = () => {
     if (!playerRef.current) return;
@@ -211,8 +373,12 @@ export default function VoxelGame() {
         yaw: playerRef.current.yaw,
         gold: playerRef.current.gold,
         lv: playerRef.current.lv,
-        seed: opts.seed,
-        biome: opts.biome
+        xp: playerRef.current.xp,
+        hp: playerRef.current.hp,
+        seed: optsRef.current.seed,
+        biome: optsRef.current.biome,
+        bagItems: bagItems,
+        hotbar: hotbar
       }));
     } catch (e) { }
   };
@@ -275,7 +441,7 @@ export default function VoxelGame() {
 
     // 3. Initiate Player & spawn safety height
     const player = new Player(cam);
-    player.fly = opts.mode === 'creative';
+    player.fly = optsRef.current.mode === 'creative';
     const initH = wgen.h(8, 8);
     player.pos.set(8, initH + 3, 8);
     playerRef.current = player;
@@ -285,7 +451,7 @@ export default function VoxelGame() {
       const saved = localStorage.getItem('vv5_react');
       if (saved) {
         const d = JSON.parse(saved);
-        if (d.seed === opts.seed && d.biome === opts.biome) {
+        if (d.seed === optsRef.current.seed && d.biome === optsRef.current.biome) {
           if (d.pos) player.pos.set(d.pos[0], d.pos[1], d.pos[2]);
           if (d.yaw != null) player.yaw = d.yaw;
         } else {
@@ -297,8 +463,11 @@ export default function VoxelGame() {
         if (d.lv != null) {
           player.lv = d.lv;
           player.mhp = 20 + (d.lv - 1) * 2;
-          player.hp = player.mhp;
+          player.hp = d.hp ?? player.mhp;
+          player.xp = d.xp ?? 0;
         }
+        if (d.bagItems) setBagItems(d.bagItems);
+        if (d.hotbar) setHotbar(d.hotbar);
       }
     } catch (err) { }
 
@@ -310,33 +479,36 @@ export default function VoxelGame() {
 
     // --- Connect to Socket.IO Multiplayer Servers ---
     socketService.connect(
-      opts.name,
+      optsRef.current.name,
       player.pos.x,
       player.pos.y,
       player.pos.z,
       player.yaw,
-      opts.room || 'lobby'
+      optsRef.current.room || 'lobby',
+      optsRef.current.skinColor,
+      optsRef.current.shirtColor,
+      optsRef.current.pantsColor
     );
 
     const remotePlayers = new Map<string, THREE.Group>();
 
-    const createPlayerMesh = (name: string): THREE.Group => {
+    const createPlayerMesh = (name: string, skinColor = '#dbcca0', shirtColor = '#3b82f6', pantsColor = '#1d4ed8'): THREE.Group => {
       const group = new THREE.Group();
 
       // Simple box head (steve / custom character)
-      const headMat = new THREE.MeshStandardMaterial({ color: 0xdbcca0 });
+      const headMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor) });
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
       head.position.y = 1.45;
       group.add(head);
 
       // Body mesh
-      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 }); // blue shirt
+      const bodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(shirtColor) }); // shirt
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 0.35), bodyMat);
       body.position.y = 0.825;
       group.add(body);
 
       // Left leg
-      const legMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8 }); // blue pants
+      const legMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(pantsColor) }); // pants
       const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.45, 0.22), legMat);
       leftLeg.position.set(-0.15, 0.225, 0);
       group.add(leftLeg);
@@ -347,7 +519,7 @@ export default function VoxelGame() {
       group.add(rightLeg);
 
       // Left arm
-      const armMat = new THREE.MeshStandardMaterial({ color: 0xdbcca0 });
+      const armMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor) });
       const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.6, 0.18), armMat);
       leftArm.position.set(-0.35, 0.9, 0);
       group.add(leftArm);
@@ -403,7 +575,7 @@ export default function VoxelGame() {
 
       list.forEach((p: any) => {
         if (p.id !== socketService.socket?.id) {
-          const m = createPlayerMesh(p.name);
+          const m = createPlayerMesh(p.name, p.skinColor, p.shirtColor, p.pantsColor);
           m.position.set(p.x, p.y, p.z);
           m.rotation.y = p.rotY || 0;
           scene.add(m);
@@ -415,7 +587,7 @@ export default function VoxelGame() {
     // Listen to players joiner
     socketService.on('player:joined', (p) => {
       if (p.id !== socketService.socket?.id && !remotePlayers.has(p.id)) {
-        const m = createPlayerMesh(p.name);
+        const m = createPlayerMesh(p.name, p.skinColor, p.shirtColor, p.pantsColor);
         m.position.set(p.x, p.y, p.z);
         m.rotation.y = p.rotY || 0;
         scene.add(m);
@@ -430,6 +602,22 @@ export default function VoxelGame() {
       if (m) {
         m.position.set(p.x, p.y, p.z);
         m.rotation.y = p.rotY || 0;
+
+        // Dynamic clothing update!
+        if (p.skinColor || p.shirtColor || p.pantsColor) {
+          m.children.forEach((child, idx) => {
+            if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+              const mat = child.material;
+              if (idx === 0 || idx === 4 || idx === 5) { // Head, Left arm, Right arm
+                if (p.skinColor) mat.color.set(p.skinColor);
+              } else if (idx === 1) { // Body
+                if (p.shirtColor) mat.color.set(p.shirtColor);
+              } else if (idx === 2 || idx === 3) { // Legs
+                if (p.pantsColor) mat.color.set(p.pantsColor);
+              }
+            }
+          });
+        }
       }
     });
 
@@ -467,7 +655,7 @@ export default function VoxelGame() {
     hlRef.current = hl;
 
     // 5. Spawn bots & mobs
-    const botNum = parseInt(opts.botCount || '3', 10);
+    const botNum = parseInt(optsRef.current.botCount || '3', 10);
     const ents: Entity[] = [];
     const hostiles = ['zombie', 'skeleton', 'spider'];
     const animals = ['cow', 'pig', 'chicken', 'sheep'];
@@ -519,6 +707,7 @@ export default function VoxelGame() {
       if (e.code === 'Escape') {
         setInventoryActive(false);
         setShopActive(false);
+        setShowSettings(prev => !prev);
       }
     };
 
@@ -624,7 +813,8 @@ export default function VoxelGame() {
             jy: tInst.jy
           };
 
-          pInst.upd(dt, instInputs, cInst, opts.mode, (src) => {
+          pInst.fly = optsRef.current.mode === 'creative';
+          pInst.upd(dt, instInputs, cInst, optsRef.current.mode, (src) => {
             setIsDead(true);
             setDeadMsg(src);
             synth.playHit();
@@ -666,7 +856,10 @@ export default function VoxelGame() {
                 x: curP.x,
                 y: curP.y,
                 z: curP.z,
-                rotY: pInst.yaw
+                rotY: pInst.yaw,
+                skinColor: opts.skinColor,
+                shirtColor: opts.shirtColor,
+                pantsColor: opts.pantsColor
               });
               lastEmitPos.current.copy(curP);
               lastEmitYaw.current = pInst.yaw;
@@ -743,23 +936,28 @@ export default function VoxelGame() {
               // Sync block remove to other players
               socketService.emit('block:change', { x: hoverBlock.x, y: hoverBlock.y, z: hoverBlock.z, blockId: 0 });
               
+              const bId = hoverBlock.block;
+              if (bId > 0) {
+                addBagItem(String(bId), 1);
+              }
+
               if (hoverBlock.block === 14) {
                 pInst.gold += 3;
                 setGoldCount(pInst.gold);
-                triggerToast('⛏️ Vàng! +3🪙');
+                triggerToast('⛏️ Vàng! +3🪙 (Khối quặng đã được thu thập)');
               } else if (hoverBlock.block === 15) {
                 pInst.gold += 8;
                 setGoldCount(pInst.gold);
-                triggerToast('💎 Kim cương! +8🪙');
+                triggerToast('💎 Kim cương! +8🪙 (Khối kim cương đã được thu thập)');
               } else {
-                triggerToast('Phá: ' + (BLK[hoverBlock.block]?.n || 'khối'));
+                triggerToast('Phá: ' + (BLK[hoverBlock.block]?.n || 'khối') + ' (+1 trong túi đồ)');
               }
             }
           }
 
           // Place blocks
           if (doPlace && hoverBlock && hoverBlock.face) {
-            const currentSelectedSlot = hotbar[selIndex];
+            const currentSelectedSlot = hotbarRef.current[selIndexRef.current];
             if (currentSelectedSlot && currentSelectedSlot.id > 0) {
               const nx = hoverBlock.x + hoverBlock.face[0];
               const ny = hoverBlock.y + hoverBlock.face[1];
@@ -770,7 +968,7 @@ export default function VoxelGame() {
                 synth.playPlace();
                 cInst.wSet(nx, ny, nz, currentSelectedSlot.id);
                 cInst.upd(pInst.pos.x, pInst.pos.z, Dev.rd());
-                triggerToast('Đặt khối ✅');
+                triggerToast('Đặt khối: ' + (BLK[currentSelectedSlot.id]?.n || 'khối') + ' ✅');
 
                 // Sync block placement to other players
                 socketService.emit('block:change', { x: nx, y: ny, z: nz, blockId: currentSelectedSlot.id });
@@ -786,7 +984,7 @@ export default function VoxelGame() {
         setIsNight(dInst.night());
 
         // Spawn extra bad mobs at night
-        if (dInst.night() && opts.mode !== 'creative') {
+        if (dInst.night() && optsRef.current.mode !== 'creative') {
           nightSpawnAccumulator.current += dt;
           if (nightSpawnAccumulator.current > 35) {
             nightSpawnAccumulator.current = 0;
@@ -845,6 +1043,75 @@ export default function VoxelGame() {
           setCoordsText(`${Math.floor(pInst.pos.x)}, ${Math.floor(pInst.pos.y)}, ${Math.floor(pInst.pos.z)}`);
           fpsAcc.current = 0;
           fpsCnt.current = 0;
+        }
+
+        // Draw Minimap (every few frames for performance)
+        if (minimapCanvasRef.current && fpsCnt.current % 5 === 0) {
+          const ctx = minimapCanvasRef.current.getContext('2d', { alpha: false });
+          if (ctx) {
+            const size = 100;
+            ctx.fillStyle = '#1e293b'; // background
+            ctx.fillRect(0, 0, size, size);
+            
+            const px = pInst.pos.x;
+            const pz = pInst.pos.z;
+            const py = pInst.pos.y;
+            const r = 25; // 25 blocks radius
+            const scale = size / (r * 2);
+
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            // Rotate minimap depending on player facing
+            ctx.rotate(pInst.yaw);
+            ctx.translate(-size / 2, -size / 2);
+
+            for (let bx = Math.floor(px - r); bx <= Math.ceil(px + r); bx++) {
+              for (let bz = Math.floor(pz - r); bz <= Math.ceil(pz + r); bz++) {
+                const dy = Math.floor(py);
+                let highest = 0;
+                
+                // Fast search for highest block near player Y level
+                for (let yy = dy + 2; yy >= dy - 15; yy--) {
+                  const b = cInst.wGet(bx, yy, bz);
+                  if (b !== 0) { highest = b; break; }
+                }
+                
+                if (highest === 0) {
+                  // Fallback to WGen height estimation
+                  const genH = wgen.h(bx, bz);
+                  if (genH < dy + 2) highest = 1; // default to grass
+                }
+
+                if (highest !== 0) {
+                  // Determine block color purely for minimap visual
+                  let c = '#4caf50'; // grass
+                  if (highest === 3 || highest === 4) c = '#78909c'; // stone
+                  else if (highest === 2) c = '#795548'; // dirt
+                  else if (highest === 6 || highest === 7) c = '#2e7d32'; // leaves/wood
+                  else if (highest === 8) c = '#ffffff'; // snow
+                  else if (highest === 9) c = '#ff9800'; // sand
+                  else if (highest === 11 || highest === 14 || highest === 15) c = '#0ea5e9'; // ores
+                  else if (highest === 5) c = '#e2e8f0'; // bricks
+                  
+                  ctx.fillStyle = c;
+                  const rx = (bx - px + r) * scale;
+                  const ry = (bz - pz + r) * scale;
+                  ctx.fillRect(rx, ry, scale + 0.5, scale + 0.5);
+                }
+              }
+            }
+            
+            // Draw remote players on minimap
+            ctx.fillStyle = '#ef4444'; // red dots for enemies/players
+            entsRef.current.forEach(e => {
+              const ex = (e.pos.x - px + r) * scale;
+              const ez = (e.pos.z - pz + r) * scale;
+              if (ex >= 0 && ez >= 0 && ex <= size && ez <= size) {
+                ctx.fillRect(ex - 1.5, ez - 1.5, 3, 3);
+              }
+            });
+            ctx.restore();
+          }
         }
 
         renderer.render(scene, cam);
@@ -1027,7 +1294,7 @@ export default function VoxelGame() {
       entsRef.current.forEach(e => e.remove());
       socketService.disconnect();
     };
-  }, [isPlaying, opts]);
+  }, [isPlaying]);
 
   const updateJoystickCoords = (cx: number, cy: number, tracker: any) => {
     const R = tracker._jR || 38;
@@ -1239,6 +1506,105 @@ export default function VoxelGame() {
               </div>
             </div>
 
+            {/* Online character dynamic creator panel */}
+            <div className="mt-4 border border-slate-700/60 bg-slate-900/40 rounded-xl p-3">
+              <label className="block mb-2 font-bold text-xs text-emerald-400 select-none uppercase tracking-wider">👤 Tạo nhân vật &amp; thay xiêm y (Sảnh Online)</label>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Skin Color Picker */}
+                <div>
+                  <span className="block text-[11px] text-slate-400 mb-1 select-none">Màu Da (Skin Color)</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { c: '#dbcca0', name: 'Sáng' },
+                      { c: '#bf9e75', name: 'Rám nắng' },
+                      { c: '#10b981', name: 'Alien' },
+                      { c: '#ec4899', name: 'Hồng sen' },
+                      { c: '#8b5cf6', name: 'Tử khí' }
+                    ].map((item) => (
+                      <button
+                        key={item.c}
+                        type="button"
+                        className={`w-5 h-5 rounded border cursor-pointer transition-all ${opts.skinColor === item.c ? 'border-emerald-400 scale-110 shadow shadow-emerald-400/50' : 'border-slate-800 hover:scale-105'}`}
+                        style={{ backgroundColor: item.c }}
+                        title={item.name}
+                        onClick={() => setOpts(prev => ({ ...prev, skinColor: item.c }))}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Shirt Color Picker */}
+                <div>
+                  <span className="block text-[11px] text-slate-400 mb-1 select-none">Màu Áo (Shirt Color)</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { c: '#3b82f6', name: 'Xanh dương' },
+                      { c: '#ef4444', name: 'Đỏ ruby' },
+                      { c: '#10b981', name: 'Xanh ngọc' },
+                      { c: '#f59e0b', name: 'Vàng cam' },
+                      { c: '#1e293b', name: 'Bóng đêm' }
+                    ].map((item) => (
+                      <button
+                        key={item.c}
+                        type="button"
+                        className={`w-5 h-5 rounded border cursor-pointer transition-all ${opts.shirtColor === item.c ? 'border-emerald-400 scale-110 shadow shadow-emerald-400/50' : 'border-slate-800 hover:scale-105'}`}
+                        style={{ backgroundColor: item.c }}
+                        title={item.name}
+                        onClick={() => setOpts(prev => ({ ...prev, shirtColor: item.c }))}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pants Color Picker */}
+                <div>
+                  <span className="block text-[11px] text-slate-400 mb-1 select-none">Màu Quần (Pants Color)</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[
+                      { c: '#1d4ed8', name: 'Xanh jean' },
+                      { c: '#111827', name: 'Huyền bí' },
+                      { c: '#7c2d12', name: 'Nâu đất' },
+                      { c: '#0f766e', name: 'Nhung rêu' },
+                      { c: '#ec4899', name: 'Phá cách' }
+                    ].map((item) => (
+                      <button
+                        key={item.c}
+                        type="button"
+                        className={`w-5 h-5 rounded border cursor-pointer transition-all ${opts.pantsColor === item.c ? 'border-emerald-400 scale-110 shadow shadow-emerald-400/50' : 'border-slate-800 hover:scale-105'}`}
+                        style={{ backgroundColor: item.c }}
+                        title={item.name}
+                        onClick={() => setOpts(prev => ({ ...prev, pantsColor: item.c }))}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Character CSS Preview and Avatar card */}
+              <div className="flex justify-center items-center mt-3 p-2 bg-slate-950/60 rounded-lg border border-slate-800">
+                <div className="text-center">
+                  <span className="text-[10px] text-slate-500 block uppercase tracking-wider mb-2 select-none">Xem Trước Nhân Vật (Avatar Preview)</span>
+                  <div className="flex flex-col items-center justify-center space-y-0.5" style={{ height: '70px', width: '50px' }}>
+                    {/* Head */}
+                    <div className="w-5 h-5 rounded-sm transition-colors duration-200 border border-slate-800/10" style={{ backgroundColor: opts.skinColor }} />
+                    {/* Body */}
+                    <div className="w-7 h-7 rounded-sm transition-colors duration-200 flex justify-between px-0.5 select-none relative" style={{ backgroundColor: opts.shirtColor }}>
+                      {/* Left and Right Arms */}
+                      <div className="w-1.5 h-full rounded-sm absolute -left-2 top-0" style={{ backgroundColor: opts.skinColor }} />
+                      <div className="w-1.5 h-full rounded-sm absolute -right-2 top-0" style={{ backgroundColor: opts.skinColor }} />
+                    </div>
+                    {/* Legs */}
+                    <div className="flex gap-1 w-7 h-5 justify-between">
+                      <div className="w-3 h-full rounded-sm transition-colors duration-200" style={{ backgroundColor: opts.pantsColor }} />
+                      <div className="w-3 h-full rounded-sm transition-colors duration-200" style={{ backgroundColor: opts.pantsColor }} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-300 font-bold block mt-1.5">{opts.name || 'Steve'}</span>
+                </div>
+              </div>
+            </div>
+
             <div className="mt-4">
               <label className="block mb-1 font-bold">Chế Độ Chơi Game</label>
               <div className="mg">
@@ -1246,7 +1612,7 @@ export default function VoxelGame() {
                   type="button"
                   className={`mc2 ${opts.mode === 'creative' ? 's' : ''}`}
                   onClick={() => {
-                    setOpts({ ...opts, mode: 'creative' });
+                    setOpts(prev => ({ ...prev, mode: 'creative' }));
                     setCurrentBadge('🎨 CREATIVE');
                   }}
                 >
@@ -1258,7 +1624,7 @@ export default function VoxelGame() {
                   type="button"
                   className={`mc2 ${opts.mode === 'survival' ? 's' : ''}`}
                   onClick={() => {
-                    setOpts({ ...opts, mode: 'survival' });
+                    setOpts(prev => ({ ...prev, mode: 'survival' }));
                     setCurrentBadge('⚔️ SURVIVAL');
                   }}
                 >
@@ -1270,7 +1636,7 @@ export default function VoxelGame() {
                   type="button"
                   className={`mc2 ${opts.mode === 'adventure' ? 's' : ''}`}
                   onClick={() => {
-                    setOpts({ ...opts, mode: 'adventure' });
+                    setOpts(prev => ({ ...prev, mode: 'adventure' }));
                     setCurrentBadge('🗺️ ADVENTURE');
                   }}
                 >
@@ -1459,6 +1825,17 @@ export default function VoxelGame() {
           >
             {currentBadge}
           </span>
+          
+          {/* Circular Minimap Overlay */}
+          <div className="absolute top-4 left-4 z-10 w-28 h-28 rounded-full overflow-hidden border-2 border-slate-700/80 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-slate-900/60 backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity">
+            <canvas ref={minimapCanvasRef} width={100} height={100} className="w-full h-full [image-rendering:pixelated]" />
+            <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-sm shadow-red-500/50"></div>
+            {/* Compass labels */}
+            <span className="absolute top-0.5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white/70 select-none">N</span>
+            <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white/70 select-none">S</span>
+            <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70 select-none">W</span>
+            <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70 select-none">E</span>
+          </div>
 
           {/* Display screen Crosshair targeting point */}
           <div className="ch"></div>
@@ -1611,9 +1988,9 @@ export default function VoxelGame() {
       {/* ─── 4. BAG INVENTORY TAB MODAL OVERLAY ─── */}
       {inventoryActive && (
         <div id="inventory" className="on">
-          <div className="ip border-dashed backdrop-blur-md">
+          <div className="ip border-dashed backdrop-blur-md max-w-2xl">
             {/* Filtering Tabs */}
-            <div className="tabs">
+            <div className="tabs flex-wrap gap-1">
               <button
                 className={`tab ${activeTab === 'blocks' ? 'on' : ''}`}
                 onClick={() => setActiveTab('blocks')}
@@ -1632,10 +2009,26 @@ export default function VoxelGame() {
               >
                 🍖 Thực Phẩm
               </button>
+              <button
+                className={`tab ${activeTab === 'clothing' ? 'on' : ''}`}
+                onClick={() => setActiveTab('clothing')}
+              >
+                👕 Thay Quần Áo
+              </button>
+              <button
+                className={`tab ${activeTab === 'crafting' ? 'on' : ''}`}
+                onClick={() => setActiveTab('crafting')}
+                style={{
+                  background: activeTab === 'crafting' ? 'linear-gradient(135deg, #0d9488, #0f766e)' : undefined,
+                  borderColor: activeTab === 'crafting' ? '#0f766e' : undefined
+                }}
+              >
+                ⚒️ Chế Tạo
+              </button>
             </div>
 
             {/* Bag section label and lists */}
-            <h3 className="mb-2">📦 Kho Đồ &amp; Hành Trang</h3>
+            <h3 className="mb-2 uppercase tracking-wide text-xs text-slate-400">📦 Kho Đồ &amp; Hành Trang ({activeTab.toUpperCase()})</h3>
 
             {activeTab === 'blocks' ? (
               <div className="ig">
@@ -1666,6 +2059,216 @@ export default function VoxelGame() {
                     </div>
                   );
                 })}
+              </div>
+            ) : activeTab === 'clothing' ? (
+              <div className="p-3 bg-slate-900/60 rounded-xl space-y-3 max-h-[50vh] overflow-y-auto border border-slate-700/40">
+                <p className="text-slate-300 text-xs text-center">
+                  👗 Tự chọn màu da và thay xiêm y lộng lẫy để hiển thị trước toàn bộ đồng đội trong sảnh chơi!
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <span className="block text-xs font-bold text-slate-400 mb-1">Màu Sắc Da:</span>
+                    <div className="flex gap-2 justify-center">
+                      {[
+                        { c: '#dbcca0', name: 'Sáng' },
+                        { c: '#bf9e75', name: 'Rám nắng' },
+                        { c: '#10b981', name: 'Alien' },
+                        { c: '#ec4899', name: 'Gợi cảm' },
+                        { c: '#8b5cf6', name: 'Pháp sư' }
+                      ].map((item) => (
+                        <button
+                          key={item.c}
+                          type="button"
+                          className={`w-7 h-7 rounded-sm border-2 cursor-pointer transition-all ${opts.skinColor === item.c ? 'border-emerald-400 scale-110 shadow' : 'border-slate-800'}`}
+                          style={{ backgroundColor: item.c }}
+                          onClick={() => {
+                            setOpts(prev => {
+                              const next = { ...prev, skinColor: item.c };
+                              if (socketService.socket?.connected && playerRef.current) {
+                                socketService.emit('player:move', {
+                                  x: playerRef.current.pos.x,
+                                  y: playerRef.current.pos.y,
+                                  z: playerRef.current.pos.z,
+                                  rotY: playerRef.current.yaw,
+                                  skinColor: item.c,
+                                  shirtColor: prev.shirtColor,
+                                  pantsColor: prev.pantsColor
+                                });
+                              }
+                              return next;
+                            });
+                            triggerToast('✨ Đã thay nước Da mới!');
+                            synth.playPlace();
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-xs font-bold text-slate-400 mb-1">Thiết Kế Áo Thun (Shirt):</span>
+                    <div className="flex gap-2 justify-center">
+                      {[
+                        { c: '#3b82f6', name: 'Xanh dương' },
+                        { c: '#ef4444', name: 'Đỏ ruby' },
+                        { c: '#10b981', name: 'Xanh saphire' },
+                        { c: '#f59e0b', name: 'Vàng cam' },
+                        { c: '#1e293b', name: 'Xám khói' }
+                      ].map((item) => (
+                        <button
+                          key={item.c}
+                          type="button"
+                          className={`w-7 h-7 rounded-sm border-2 cursor-pointer transition-all ${opts.shirtColor === item.c ? 'border-emerald-400 scale-110 shadow' : 'border-slate-800'}`}
+                          style={{ backgroundColor: item.c }}
+                          onClick={() => {
+                            setOpts(prev => {
+                              const next = { ...prev, shirtColor: item.c };
+                              if (socketService.socket?.connected && playerRef.current) {
+                                socketService.emit('player:move', {
+                                  x: playerRef.current.pos.x,
+                                  y: playerRef.current.pos.y,
+                                  z: playerRef.current.pos.z,
+                                  rotY: playerRef.current.yaw,
+                                  skinColor: prev.skinColor,
+                                  shirtColor: item.c,
+                                  pantsColor: prev.pantsColor
+                                });
+                              }
+                              return next;
+                            });
+                            triggerToast('👕 Đã đổi màu Áo thun!');
+                            synth.playPlace();
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-xs font-bold text-slate-400 mb-1">Màu Sắc Quần (Pants):</span>
+                    <div className="flex gap-2 justify-center">
+                      {[
+                        { c: '#1d4ed8', name: 'Xanh jean' },
+                        { c: '#111827', name: 'Đen lụa' },
+                        { c: '#7c2d12', name: 'Nâu nhung' },
+                        { c: '#0f766e', name: 'Xanh rêu' },
+                        { c: '#ec4899', name: 'Hồng sen' }
+                      ].map((item) => (
+                        <button
+                          key={item.c}
+                          type="button"
+                          className={`w-7 h-7 rounded-sm border-2 cursor-pointer transition-all ${opts.pantsColor === item.c ? 'border-emerald-400 scale-110 shadow' : 'border-slate-800'}`}
+                          style={{ backgroundColor: item.c }}
+                          onClick={() => {
+                            setOpts(prev => {
+                              const next = { ...prev, pantsColor: item.c };
+                              if (socketService.socket?.connected && playerRef.current) {
+                                socketService.emit('player:move', {
+                                  x: playerRef.current.pos.x,
+                                  y: playerRef.current.pos.y,
+                                  z: playerRef.current.pos.z,
+                                  rotY: playerRef.current.yaw,
+                                  skinColor: prev.skinColor,
+                                  shirtColor: prev.shirtColor,
+                                  pantsColor: item.c
+                                });
+                              }
+                              return next;
+                            });
+                            triggerToast('👖 Đã nhuộm màu Quần!');
+                            synth.playPlace();
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live Character preview */}
+                <div className="flex flex-col items-center justify-center p-2 bg-slate-950/70 rounded-lg border border-slate-800 w-[140px] mx-auto">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-widest mb-1.5 font-bold">Hình ảnh hiển thị</span>
+                  <div className="flex flex-col items-center justify-center space-y-0.5" style={{ height: '70px', width: '50px' }}>
+                    <div className="w-5 h-5 rounded-sm border border-slate-800/10" style={{ backgroundColor: opts.skinColor }} />
+                    <div className="w-7 h-7 rounded-sm flex justify-between px-0.5 relative" style={{ backgroundColor: opts.shirtColor }}>
+                      <div className="w-1.5 h-full rounded-sm absolute -left-2 top-0" style={{ backgroundColor: opts.skinColor }} />
+                      <div className="w-1.5 h-full rounded-sm absolute -right-2 top-0" style={{ backgroundColor: opts.skinColor }} />
+                    </div>
+                    <div className="flex gap-1 w-7 h-5 justify-between">
+                      <div className="w-3 h-full rounded-sm" style={{ backgroundColor: opts.pantsColor }} />
+                      <div className="w-3 h-full rounded-sm" style={{ backgroundColor: opts.pantsColor }} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-400 font-bold mt-1 max-w-full truncate">{opts.name}</span>
+                </div>
+              </div>
+            ) : activeTab === 'crafting' ? (
+              <div className="p-3 bg-slate-900/40 rounded-xl space-y-3 max-h-[50vh] overflow-y-auto border border-b-slate-700/20">
+                <p className="text-teal-300 text-xs text-center font-bold">
+                  ⚒️ BẢNG CHẾ TẠO THỦ CÔNG (RECIPES CRAFTING)
+                </p>
+                <p className="text-slate-400 text-[11px] text-center mb-2">
+                  Khai thác các khối đất, cát, đá, gỗ tròn, vàng và kim cương để làm nguyên liệu chế tạo vũ khí cực mạnh!
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {CRAFTING_RECIPES.map((recipe, index) => {
+                    const canCraft = recipe.ingredients.every((ing) => (bagItems[ing.id] || 0) >= ing.req);
+                    return (
+                      <div
+                        key={index}
+                        className={`p-2.5 rounded-lg border transition-all ${canCraft ? 'bg-teal-950/20 border-teal-500/50 hover:border-teal-400' : 'bg-slate-950/40 border-slate-800 opacity-75'}`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex gap-2">
+                            <span className="text-2xl">{recipe.resultEmoji}</span>
+                            <div>
+                              <b className="text-xs text-white block">{recipe.resultName}</b>
+                              <span className="text-[10px] text-teal-400 bg-teal-950/50 px-1 rounded block w-max mt-0.5">Số lượng: x{recipe.count}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className={`px-3 py-1 rounded text-xs font-bold leading-none select-none cursor-pointer transition-all active:scale-95 ${canCraft ? 'bg-teal-600 hover:bg-teal-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                            onClick={() => { if (canCraft) craftItem(recipe); }}
+                          >
+                            ⚒️ Chế Tạo
+                          </button>
+                        </div>
+
+                        {/* Ingredients list */}
+                        <div className="mt-1.5 pt-1 border-t border-slate-800/60 flex flex-wrap gap-x-2.5 gap-y-0.5">
+                          {recipe.ingredients.map((ing) => {
+                            const owned = bagItems[ing.id] || 0;
+                            const isEnough = owned >= ing.req;
+                            let displayName = ing.name;
+
+                            // Include visual block representation emoji
+                            let displayEmoji = '🎒';
+                            if (ing.type === 'block') {
+                              const bNum = Number(ing.id);
+                              displayEmoji = BLK[bNum]?.e || '🧱';
+                            } else {
+                              displayEmoji = ITM[ing.id]?.e || '🗡️';
+                            }
+
+                            return (
+                              <span
+                                key={ing.id}
+                                className={`text-[10px] flex items-center gap-0.5 ${isEnough ? 'text-slate-300' : 'text-rose-400 font-bold'}`}
+                              >
+                                {displayEmoji} {displayName}:{' '}
+                                <b className={isEnough ? 'text-teal-400' : 'text-rose-500'}>
+                                  {owned}/{ing.req}
+                                </b>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="ig">
@@ -1703,8 +2306,11 @@ export default function VoxelGame() {
                 Đóng hành trang
               </button>
               <button
-                className="btn flex-1 m-0 pt-2 pb-2 leading-none"
-                onClick={() => triggerToast('⚒ Hệ thống Chế Tạo đang được nâng cấp...')}
+                className={`btn flex-1 m-0 pt-2 pb-2 leading-none ${activeTab === 'crafting' ? 'bg-teal-600 text-white' : ''}`}
+                onClick={() => {
+                  setActiveTab('crafting');
+                  triggerToast('⚒️ Đã mở Bảng Chế Tạo!');
+                }}
               >
                 ⚒ Chế Tạo đồ
               </button>
@@ -1805,6 +2411,52 @@ export default function VoxelGame() {
           🔄 Hồi Sinh Ngay
         </button>
       </div>
+
+      {/* ─── SETTINGS (PAUSE) MENU ─── */}
+      <button 
+        className={`absolute top-4 right-4 z-20 w-10 h-10 bg-slate-900/80 border-2 ${showSettings ? 'border-emerald-500' : 'border-slate-700'} rounded flex items-center justify-center text-xl hover:bg-slate-800 transition-colors shadow-lg active:scale-95`}
+        onClick={() => setShowSettings(!showSettings)}
+        title="Cài đặt hệ thống (Esc)"
+      >
+        ⚙️
+      </button>
+
+      {showSettings && (
+        <div className="absolute inset-0 z-[15] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-slate-900 border-2 border-slate-700/80 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-black text-center text-white mb-6 uppercase tracking-wider text-emerald-400">⚙️ Cài Đặt (Pause)</h3>
+            
+            <div className="space-y-4">
+              <button
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded font-bold border border-slate-600 transition-colors"
+                onClick={() => {
+                  saveGameData();
+                  setShowSettings(false);
+                  triggerToast('💾 Đã lưu dữ liệu thế giới!');
+                }}
+              >
+                💾 Lưu Thế Giới Hiện Tại
+              </button>
+
+              <button
+                className="w-full py-3 bg-rose-900/40 hover:bg-rose-900/60 text-white rounded font-bold border border-rose-800/50 transition-colors"
+                onClick={() => {
+                  window.location.reload();
+                }}
+              >
+                🚪 Thoát về Sảnh Chính
+              </button>
+            </div>
+
+            <button
+              className="mt-6 w-full py-2 bg-transparent text-slate-400 hover:text-white font-bold text-sm border-t border-slate-800 pt-4"
+              onClick={() => setShowSettings(false)}
+            >
+              C.Tục Chơi
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── 7. ANIMATED SHORT FLOATING TOASTS ─── */}
       <div id="toast" className={`toast ${toastVisible ? 'show' : ''}`}>
