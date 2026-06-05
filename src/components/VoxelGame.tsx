@@ -86,6 +86,35 @@ export default function VoxelGame() {
       document.exitFullscreen();
     }
   };
+
+  /* ─── Copy friend invite link utility ─── */
+  const copyInviteLink = (roomName?: string) => {
+    const r = roomName || opts.room || 'lobby';
+    const s = opts.seed;
+    const b = opts.biome;
+    const m = opts.mode;
+    const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(r)}&seed=${encodeURIComponent(s)}&biome=${encodeURIComponent(b)}&mode=${encodeURIComponent(m)}`;
+    
+    // Attempt standard copy
+    navigator.clipboard.writeText(url)
+      .then(() => {
+        triggerToast('📋 Đã sao chép liên kết mời! Hãy gửi cho bạn bè để cùng chơi.');
+      })
+      .catch(() => {
+        // Fallback for iframe sandboxes
+        try {
+          const el = document.createElement('textarea');
+          el.value = url;
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand('copy');
+          document.body.removeChild(el);
+          triggerToast('📋 Đã sao chép liên kết mời!');
+        } catch (e) {
+          triggerToast('❌ Không thể sao chép khôi phục!');
+        }
+      });
+  };
   
   const [activeTab, setActiveTab] = useState<'blocks' | 'items' | 'food'>('blocks');
   const [activeShopTab, setActiveShopTab] = useState('weapons');
@@ -181,10 +210,36 @@ export default function VoxelGame() {
         pos: [playerRef.current.pos.x, playerRef.current.pos.y, playerRef.current.pos.z],
         yaw: playerRef.current.yaw,
         gold: playerRef.current.gold,
-        lv: playerRef.current.lv
+        lv: playerRef.current.lv,
+        seed: opts.seed,
+        biome: opts.biome
       }));
     } catch (e) { }
   };
+
+  /* ─── Read Url Invite Parameters ─── */
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlRoom = params.get('room');
+      const urlSeed = params.get('seed');
+      const urlBiome = params.get('biome');
+      const urlMode = params.get('mode');
+      
+      if (urlRoom || urlSeed || urlBiome || urlMode) {
+        setOpts((prev) => ({
+          ...prev,
+          room: urlRoom || prev.room,
+          seed: urlSeed || prev.seed,
+          biome: urlBiome || prev.biome,
+          mode: (urlMode as any) || prev.mode,
+        }));
+        setTimeout(() => {
+          triggerToast('🎁 Đã tải phòng chơi từ liên kết mời!');
+        }, 800);
+      }
+    } catch (err) { }
+  }, []);
 
   /* ─── Initialize Core Canvas & Game loop ─── */
   useEffect(() => {
@@ -225,13 +280,19 @@ export default function VoxelGame() {
     player.pos.set(8, initH + 3, 8);
     playerRef.current = player;
 
-    // Load saves if available
+    // Load saves if available, restricting position to matching seed/biome
     try {
       const saved = localStorage.getItem('vv5_react');
       if (saved) {
         const d = JSON.parse(saved);
-        if (d.pos) player.pos.set(d.pos[0], d.pos[1], d.pos[2]);
-        if (d.yaw != null) player.yaw = d.yaw;
+        if (d.seed === opts.seed && d.biome === opts.biome) {
+          if (d.pos) player.pos.set(d.pos[0], d.pos[1], d.pos[2]);
+          if (d.yaw != null) player.yaw = d.yaw;
+        } else {
+          // Reset starting position to safe biome height as seed or biome has changed
+          const safeH = wgen.h(8, 8);
+          player.pos.set(8, safeH + 3, 8);
+        }
         if (d.gold != null) player.gold = d.gold;
         if (d.lv != null) {
           player.lv = d.lv;
@@ -568,6 +629,28 @@ export default function VoxelGame() {
             setDeadMsg(src);
             synth.playHit();
           });
+
+          // Block clipping resolver & falling into the void safety recovery
+          if (!pInst.dead) {
+            // 1. Recover from void falling (below Y = 2)
+            if (pInst.pos.y < 2) {
+              const safeH = wgen.h(pInst.pos.x, pInst.pos.z);
+              pInst.pos.y = Math.max(safeH + 3, 35);
+              pInst.vel.set(0, 0, 0);
+              triggerToast('⚠️ Đã đặt lại vị trí an toàn trên mặt đất!');
+            }
+
+            // 2. Resolve solid block clipping (push player upward if stuck inside terrain chunks)
+            let limit = 0;
+            while (pInst.col(cInst, pInst.pos.x, pInst.pos.y, pInst.pos.z) && limit < 80) {
+              pInst.pos.y += 0.5;
+              limit++;
+            }
+            if (limit > 0) {
+              pInst.vel.y = 0;
+              pInst.onG = true; // Mark on ground once elevated above solid obstruction
+            }
+          }
 
           // Sync movement to other players via Socket
           if (socketService.socket?.connected) {
@@ -1118,19 +1201,46 @@ export default function VoxelGame() {
                   <option value="10">10 Thảm họa</option>
                 </select>
               </div>
-              <div className="f">
+              <div className="f" style={{ minWidth: '180px' }}>
                 <label>🌐 Phòng Chơi (Room ID)</label>
-                <input
-                  type="text"
-                  value={opts.room}
-                  placeholder="lobby"
-                  onChange={(e) => setOpts({ ...opts, room: e.target.value })}
-                />
+                <div className="flex gap-1 w-full">
+                  <input
+                    type="text"
+                    value={opts.room}
+                    placeholder="lobby"
+                    className="flex-1 min-w-[70px]"
+                    onChange={(e) => setOpts({ ...opts, room: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
+                    title="Phòng ngẫu nhiên"
+                    onClick={() => {
+                      const randRoom = 'room-' + ~~(Math.random() * 9000 + 1000);
+                      setOpts((prev) => ({ ...prev, room: randRoom }));
+                      synth.playPlace();
+                      triggerToast('✨ Đã tạo mã phòng ngẫu nhiên!');
+                    }}
+                  >
+                    🎲
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
+                    title="Sao chép liên kết mời"
+                    onClick={() => {
+                      copyInviteLink();
+                      synth.playPlace();
+                    }}
+                  >
+                    🔗 Mời
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="block mb-1 font-bold">Chế Độ Chôi Game</label>
+              <label className="block mb-1 font-bold">Chế Độ Chơi Game</label>
               <div className="mg">
                 <button
                   type="button"
@@ -1230,6 +1340,16 @@ export default function VoxelGame() {
             >
               💬 CHAT {chatLogs.length > 1 ? `(${chatLogs.length - 1})` : ''}
             </div>
+            <button
+              type="button"
+              className="pill cursor-pointer select-none font-bold active:scale-95 bg-emerald-600 border border-emerald-500 text-white hover:bg-emerald-400"
+              onClick={() => {
+                copyInviteLink();
+                synth.playPlace();
+              }}
+            >
+              🔗 MỜI BẠN
+            </button>
             <button
               type="button"
               className="pill cursor-pointer select-none font-bold active:scale-95 bg-slate-900 border border-slate-700"
