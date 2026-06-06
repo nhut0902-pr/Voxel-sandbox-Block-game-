@@ -890,3 +890,30 @@ input:focus, select:focus {
 .toast.show {
   opacity: 1;
 }
+
+@media (max-width: 640px) {
+  #joyWrap {
+    width: 90px !important;
+    height: 90px !important;
+    bottom: calc(66px + max(env(safe-area-inset-bottom), 0px)) !important;
+    left: max(10px, env(safe-area-inset-left)) !important;
+  }
+  #joyRing {
+    border-radius: 45px !important;
+  }
+  #joyKnob {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  #actBtns {
+    bottom: calc(66px + max(env(safe-area-inset-bottom), 0px)) !important;
+    right: max(10px, env(safe-area-inset-right)) !important;
+    gap: 6px !important;
+  }
+  .ab {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 22px !important;
+    font-size: 8px !important;
+  }
+}

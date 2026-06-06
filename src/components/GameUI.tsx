@@ -47,6 +47,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
 
   // Drag State
   const [dragSlot, setDragSlot] = useState<number | null>(null);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
 
   // Crafting Grid State (3x3 matching)
   const [craftGrid, setCraftGrid] = useState<(string | null)[]>(Array(9).fill(null));
@@ -373,6 +374,11 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleSlotDrop(idx)}
                         onContextMenu={(e) => handleSlotRightClick(e, idx)}
+                        onClick={() => {
+                          if (item) {
+                            setSelectedSlotIndex(selectedSlotIndex === idx ? null : idx);
+                          }
+                        }}
                         className={`aspect-square rounded-lg border flex flex-col items-center justify-center p-1 transition-all ${
                           getRarityClass(item?.rarity)
                         } hover:border-white/30 relative select-none cursor-grab active:cursor-grabbing`}
@@ -390,20 +396,41 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
                             <span className="absolute bottom-1 right-1 text-white text-xs font-mono bg-neutral-900/60 px-0.5 rounded-sm scale-90 font-bold">{item.count}</span>
                             
                             {/* Actions block label */}
-                            <div className="absolute inset-0 opacity-0 hover:opacity-100 bg-neutral-950/90 rounded-lg flex flex-col p-1 justify-between transition-all">
+                            <div className={`absolute inset-0 bg-neutral-950/95 rounded-lg flex flex-col p-1 justify-between transition-all ${
+                              selectedSlotIndex === idx 
+                                ? 'opacity-100 pointer-events-auto' 
+                                : 'opacity-0 md:hover:opacity-100 pointer-events-none md:pointer-events-auto'
+                            }`}>
                               <span className="text-[8px] text-neutral-300 truncate font-semibold">{item.name}</span>
                               {item.type === 'food' ? (
                                 <button 
-                                  onTouchStart={() => useFood(idx)}
-                                  onClick={() => useFood(idx)}
-                                  className="w-full text-[8px] bg-amber-500 hover:bg-amber-400 text-black rounded-xs font-bold font-sans py-0.5 cursor-pointer leading-none"
+                                  onTouchStart={(e) => {
+                                    e.stopPropagation();
+                                    useFood(idx);
+                                    setSelectedSlotIndex(null);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    useFood(idx);
+                                    setSelectedSlotIndex(null);
+                                  }}
+                                  className="w-full text-[8px] bg-amber-500 hover:bg-amber-400 text-black rounded-xs font-bold font-sans py-1 cursor-pointer leading-none"
                                 >
                                   Eat
                                 </button>
                               ) : (
                                 <button 
-                                  onClick={() => sellItemFromSlot(idx)}
-                                  className="w-full text-[8px] bg-yellow-400 hover:bg-yellow-300 text-black rounded-xs font-bold font-sans py-0.5 cursor-pointer leading-none"
+                                  onTouchStart={(e) => {
+                                    e.stopPropagation();
+                                    sellItemFromSlot(idx);
+                                    setSelectedSlotIndex(null);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    sellItemFromSlot(idx);
+                                    setSelectedSlotIndex(null);
+                                  }}
+                                  className="w-full text-[8px] bg-yellow-400 hover:bg-yellow-300 text-black rounded-xs font-bold font-sans py-1 cursor-pointer leading-none"
                                 >
                                   Recycle
                                 </button>
@@ -780,11 +807,11 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
       <div className="w-full flex flex-col gap-1.5 items-center pb-2 pointer-events-none">
         
         {/* Navigation panel selectors */}
-        <div className="flex gap-1.5 bg-neutral-950/70 border border-white/10 rounded-full px-3 py-1 text-xs select-none pointer-events-auto">
+        <div className="flex gap-0.5 xs:gap-1 sm:gap-1.5 bg-neutral-950/80 border border-white/10 rounded-full px-1.5 xs:px-3 py-1 text-[10px] xs:text-xs select-none pointer-events-auto overflow-x-auto max-w-full">
           <button 
             id="tab-inventory"
             onClick={() => setActiveTab(activeTab === 'inventory' ? null : 'inventory')}
-            className={`flex items-center gap-1 p-1 px-2 rounded-full cursor-pointer transition-all ${
+            className={`flex items-center gap-0.5 xs:gap-1 p-1 px-1.5 xs:px-2.5 rounded-full cursor-pointer transition-all ${
               activeTab === 'inventory' ? 'bg-yellow-400 text-neutral-900 font-bold' : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -795,7 +822,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
           <button 
             id="tab-backpack"
             onClick={() => setActiveTab(activeTab === 'backpack' ? null : 'backpack')}
-            className={`flex items-center gap-1 p-1 px-2 rounded-full cursor-pointer transition-all ${
+            className={`flex items-center gap-0.5 xs:gap-1 p-1 px-1.5 xs:px-2.5 rounded-full cursor-pointer transition-all ${
               activeTab === 'backpack' ? 'bg-amber-400 text-neutral-900 font-bold' : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -806,7 +833,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
           <button 
             id="tab-crafting"
             onClick={() => setActiveTab(activeTab === 'crafting' ? null : 'crafting')}
-            className={`flex items-center gap-1 p-1 px-2 rounded-full cursor-pointer transition-all ${
+            className={`flex items-center gap-0.5 xs:gap-1 p-1 px-1.5 xs:px-2.5 rounded-full cursor-pointer transition-all ${
               activeTab === 'crafting' ? 'bg-blue-400 text-neutral-900 font-bold' : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -817,7 +844,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
           <button 
             id="tab-shop"
             onClick={() => setActiveTab(activeTab === 'shop' ? null : 'shop')}
-            className={`flex items-center gap-1 p-1 px-2 rounded-full cursor-pointer transition-all ${
+            className={`flex items-center gap-0.5 xs:gap-1 p-1 px-1.5 xs:px-2.5 rounded-full cursor-pointer transition-all ${
               activeTab === 'shop' ? 'bg-emerald-400 text-neutral-900 font-bold' : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -828,7 +855,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
           <button 
             id="tab-quests"
             onClick={() => setActiveTab(activeTab === 'quests' ? null : 'quests')}
-            className={`flex items-center gap-1 p-1 px-2 rounded-full cursor-pointer transition-all ${
+            className={`flex items-center gap-0.5 xs:gap-1 p-1 px-1.5 xs:px-2.5 rounded-full cursor-pointer transition-all ${
               activeTab === 'quests' ? 'bg-pink-400 text-neutral-900 font-bold' : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -856,7 +883,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
         </div>
 
         {/* Hotbar Slots indicator */}
-        <div className="flex gap-1.5 bg-neutral-900/80 border border-white/10 rounded-2xl p-2 shadow-xl pointer-events-auto">
+        <div className="flex gap-0.5 xs:gap-1 bg-neutral-900/80 border border-white/10 rounded-xl sm:rounded-2xl p-1 xs:p-2 shadow-xl pointer-events-auto">
           {inventory.slice(0, 9).map((item, idx) => (
             <div 
               key={idx}
@@ -864,7 +891,7 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
                 setHotbarIndex(idx);
                 audioSystem.playPlaceBlock();
               }}
-              className={`w-11 sm:w-12 aspect-square rounded-xl border flex flex-col items-center justify-center relative cursor-key-select hover:border-white/30 transition-all ${
+              className={`w-7 h-7 xs:w-9 xs:h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 aspect-square rounded-lg sm:rounded-xl border flex flex-col items-center justify-center relative cursor-key-select hover:border-white/30 transition-all ${
                 idx === hotbarIndex 
                   ? 'border-yellow-400 bg-yellow-950/30 scale-105 shadow-md shadow-yellow-500/10' 
                   : getRarityClass(item?.rarity)
@@ -873,13 +900,13 @@ export default function GameUI({ gpsCoords, fps, mobileControls, onExit, onMobil
               {item ? (
                 <>
                   <div 
-                    className="w-4 sm:w-5 aspect-square rounded-xs"
+                    className="w-3 xs:w-4 sm:w-5 aspect-square rounded-xs animate-pulse"
                     style={{ backgroundColor: item.type === 'block' ? getBlockColorHex(item.id) : '#3a3a44' }}
                   />
-                  <span className="absolute bottom-0.5 right-1 text-[9px] text-white font-mono bg-neutral-950/40 px-0.5 rounded-xs font-black">{item.count}</span>
+                  <span className="absolute bottom-0.5 right-1 text-[8px] sm:text-[9px] text-white font-mono bg-neutral-950/40 px-0.5 rounded-xs font-black">{item.count}</span>
                 </>
               ) : (
-                <span className="text-[10px] text-neutral-700 font-black">{idx + 1}</span>
+                <span className="text-[9px] text-neutral-700 font-black">{idx + 1}</span>
               )}
             </div>
           ))}

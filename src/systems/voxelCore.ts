@@ -598,10 +598,26 @@ export class Player {
     if (mode === 'survival') {
       this.hunger = Math.max(0, this.hunger - dt * 0.005);
       if (this.hunger < 5) this.hp = Math.max(0, this.hp - dt * 0.35);
+      
+      // Auto health regeneration feature
+      const timeSinceDamage = performance.now() - this.lastH;
+      if (this.hunger >= 15 && this.hp < this.mhp && timeSinceDamage > 4000) {
+        // High saturation: heal faster when out of combat (>= 4s since last hit)
+        this.hp = Math.min(this.mhp, this.hp + dt * 0.6);
+      } else if (this.hunger >= 8 && this.hp < this.mhp && timeSinceDamage > 7000) {
+        // Moderate saturation: slow healing when safe (>= 7s since last hit)
+        this.hp = Math.min(this.mhp, this.hp + dt * 0.2);
+      }
+
       if (this.hp <= 0 && !this.dead) {
         this.hp = 0;
         this.dead = true;
         onDie('đói');
+      }
+    } else {
+      // Auto heal quickly in creative / sandbox mode
+      if (this.hp < this.mhp) {
+        this.hp = Math.min(this.mhp, this.hp + dt * 5.0);
       }
     }
   }
