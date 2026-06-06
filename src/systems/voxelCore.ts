@@ -633,8 +633,8 @@ export class Player {
     this.vel = new THREE.Vector3();
     this.onG = false;
     this.fly = true;
-    this.spd = 4;
-    this.fspd = 10;
+    this.spd = 2.8;
+    this.fspd = 7.0;
     this.eyeH = 1.65;
     this.r = 0.35;
     this.h = 1.8;
@@ -1065,6 +1065,8 @@ export class DN {
   hemi: THREE.HemisphereLight;
   dir: THREE.DirectionalLight;
   isTreasure: boolean;
+  clouds: { group: THREE.Group; speedX: number; speedZ: number; }[] = [];
+  cloudMaterial: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, isTreasure = false) {
     this.scene = scene;
@@ -1109,9 +1111,62 @@ export class DN {
 
     this.dir = new THREE.DirectionalLight(0xfff2cc, 1.0);
     scene.add(this.dir);
+
+    // --- PROCEDURAL BLOCKY CLOUDS INITIALIZATION ---
+    this.cloudMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide
+    });
+
+    const cloudAlt = 50; // High in the sky
+    const cloudCount = 18;
+
+    for (let i = 0; i < cloudCount; i++) {
+      const group = new THREE.Group();
+      
+      // Combine 3 to 6 overlapping blocky boxes to make a real cumulative cloud shape
+      const blockCount = 3 + Math.floor(Math.random() * 4);
+      const baseW = 12 + Math.random() * 16;
+      const baseD = 12 + Math.random() * 16;
+      const baseH = 1 + Math.random() * 1.2;
+
+      for (let b = 0; b < blockCount; b++) {
+        // Multi-layered sizes with randomized dimension multipliers
+        const w = baseW * (0.5 + Math.random() * 0.6);
+        const d = baseD * (0.5 + Math.random() * 0.6);
+        const h = baseH * (0.7 + Math.random() * 0.4);
+
+        const geom = new THREE.BoxGeometry(w, h, d);
+        const mesh = new THREE.Mesh(geom, this.cloudMaterial);
+
+        // Displace position in voxel fashion
+        const ox = (Math.random() - 0.5) * baseW * 0.6;
+        const oy = (Math.random() - 0.5) * 0.3;
+        const oz = (Math.random() - 0.5) * baseD * 0.6;
+        mesh.position.set(ox, oy, oz);
+
+        group.add(mesh);
+      }
+
+      // Distribute randomly in a 3D coordinate space around (0, 0, 0)
+      const cx = (Math.random() - 0.5) * 440;
+      const cz = (Math.random() - 0.5) * 440;
+      const cy = cloudAlt + (Math.random() - 0.5) * 5;
+
+      group.position.set(cx, cy, cz);
+      scene.add(group);
+
+      this.clouds.push({
+        group,
+        speedX: (0.15 + Math.random() * 0.35) * (Math.random() < 0.5 ? 1 : -1),
+        speedZ: (0.15 + Math.random() * 0.35) * (Math.random() < 0.5 ? 1 : -1)
+      });
+    }
   }
 
-  upd(dt: number): void {
+  upd(dt: number, playerPos?: THREE.Vector3): void {
     this.t = (this.t + this.spd * dt * 60) % 1;
     const ang = this.t * Math.PI * 2 - Math.PI / 2, R = 260;
     this.sun.position.set(Math.cos(ang) * R, Math.sin(ang) * R, 40);
@@ -1139,6 +1194,73 @@ export class DN {
     this.dir.position.copy(this.sun.position);
     this.hemi.intensity = 0.18 + ds * 0.6;
     (this.stars.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - ds * 2.5);
+
+    // --- DRIFT CLOUDS & WRAP RELATIVE TO PLAYER ---
+    if (this.clouds && this.clouds.length > 0) {
+      const px = playerPos ? playerPos.x : 8;
+      const pz = playerPos ? playerPos.z : 8;
+      const bRad = 240; // Max view distance boundary from player
+
+      this.clouds.forEach(c => {
+        c.group.position.x += c.speedX * dt * 10;
+        c.group.position.z += c.speedZ * dt * 10;
+
+        // Wrap around player's X boundary to make infinite loop
+        if (c.group.position.x - px > bRad) {
+          c.group.position.x -= bRad * 2;
+        } else if (c.group.position.x - px < -bRad) {
+          c.group.position.x += bRad * 2;
+        }
+
+        // Wrap around player's Z boundary
+        if (c.group.position.z - pz > bRad) {
+          c.group.position.z -= bRad * 2;
+        } else if (c.group.position.z - pz < -bRad) {
+          c.group.position.z += bRad * 2;
+        }
+      });
+    }
+
+    // --- CINEMATIC ATMOSPHERIC CLOUD COLORING ---
+    let cloudColor = new THREE.Color(0xffffff);
+    if (this.isTreasure) {
+      // Lava Biome: smoky dark ash with an ember core
+      const ashColor = new THREE.Color(0x351a1a);
+      const glowColor = new THREE.Color(0xff4411);
+      const pulse = 0.45 + Math.sin(this.t * Math.PI * 5) * 0.2;
+      cloudColor.copy(ashColor).lerp(glowColor, pulse);
+    } else {
+      if (t >= 0.30 && t <= 0.70) {
+        cloudColor.setHex(0xffffff); // Midday sun: pristine white
+      } else if (t > 0.70 && t < 0.90) {
+        // Sunset transition
+        const sunsetFactor = (t - 0.70) / 0.20;
+        const midSunsetColor = new THREE.Color(0xff9e73); // Beautiful warm orange-pink sunset reflect
+        const nightCloudColor = new THREE.Color(0x283855); // Quiet moonlit midnight
+        if (sunsetFactor < 0.5) {
+          cloudColor.setHex(0xffffff).lerp(midSunsetColor, sunsetFactor * 2);
+        } else {
+          cloudColor.copy(midSunsetColor).lerp(nightCloudColor, (sunsetFactor - 0.5) * 2);
+        }
+      } else if (t >= 0.90 || t < 0.10) {
+        cloudColor.setHex(0x283855); // Night time: faint blue silhouette
+      } else {
+        // Sunrise transition
+        const sunriseFactor = (t - 0.10) / 0.20;
+        const midSunriseColor = new THREE.Color(0xffebd2); // Peachy dawn light
+        const nightCloudColor = new THREE.Color(0x283855);
+        if (sunriseFactor < 0.5) {
+          cloudColor.copy(nightCloudColor).lerp(midSunriseColor, sunriseFactor * 2);
+        } else {
+          cloudColor.copy(midSunriseColor).lerp(new THREE.Color(0xffffff), (sunriseFactor - 0.5) * 2);
+        }
+      }
+    }
+
+    if (this.cloudMaterial) {
+      this.cloudMaterial.color.copy(cloudColor);
+      this.cloudMaterial.opacity = this.isTreasure ? 0.72 : (t >= 0.30 && t <= 0.70 ? 0.62 : 0.42);
+    }
   }
 
   lbl(): string {

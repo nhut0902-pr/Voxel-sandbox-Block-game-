@@ -117,6 +117,11 @@ async function startServer() {
       }
     });
 
+    // Latency measuring
+    socket.on('latency:ping', (timestamp) => {
+      socket.emit('latency:pong', timestamp);
+    });
+
     socket.on('disconnect', () => {
       const p = players.get(socket.id);
       if (p) {

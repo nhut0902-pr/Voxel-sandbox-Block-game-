@@ -189,6 +189,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
   /* ─── HUD Sync React states ─── */
   const [fps, setFps] = useState(0);
+  const [ping, setPing] = useState<number | null>(null);
   const [chunkCount, setChunkCount] = useState(0);
   const [coordsText, setCoordsText] = useState('0, 0, 0');
   const [timeLabel, setTimeLabel] = useState('12:00');
@@ -218,6 +219,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [proximityWarning, setProximityWarning] = useState<{ name: string; dist: number; type: 'key' | 'chest' } | null>(null);
   const [showSOSModal, setShowSOSModal] = useState(false);
   const [invincibleSeconds, setInvincibleSeconds] = useState(0);
+  const [teammates, setTeammates] = useState<{ id: string; name: string; dist: number; screenX?: number; screenY?: number; onScreen: boolean; angle: number }[]>([]);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -552,6 +554,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
     const createPlayerMesh = (name: string, skinColor = '#dbcca0', shirtColor = '#3b82f6', pantsColor = '#1d4ed8'): THREE.Group => {
       const group = new THREE.Group();
+      group.name = name;
 
       // Simple box head (steve / custom character)
       const headMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor) });
@@ -702,6 +705,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       setChatLogs((prev) => [...prev, { sender: msg.sender, text: msg.text }]);
       triggerToast(`💬 ${msg.sender}: ${msg.text}`);
     });
+
+    // Measure network latency
+    socketService.on('latency:pong', (timestamp: number) => {
+      const rtt = Math.round(performance.now() - timestamp);
+      setPing(rtt);
+    });
+
+    const pingTimer = setInterval(() => {
+      if (socketService.socket && socketService.socket.connected) {
+        socketService.emit('latency:ping', performance.now());
+      } else {
+        setPing(null);
+      }
+    }, 2000);
 
     // 4. Cursor wireframe indicator
     const hl = new THREE.LineSegments(
@@ -1130,8 +1147,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           }
         }
 
-        // Atmosphere update
-        dInst.upd(dt);
+        // Atmosphere update (passing player position to drift/wrap clouds)
+        dInst.upd(dt, pInst.pos);
         setTimeLabel(dInst.lbl());
         setTimePercent(dInst.t * 100);
         
@@ -1422,6 +1439,28 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               }
             });
 
+            // Draw teammates/online friends on minimap
+            remotePlayers.forEach((group) => {
+              const ex = (group.position.x - px + r) * scale;
+              const ez = (group.position.z - pz + r) * scale;
+              if (ex >= 0 && ez >= 0 && ex <= size && ez <= size) {
+                // Circular bright green indicator marker
+                ctx.fillStyle = '#10b981';
+                ctx.beginPath();
+                ctx.arc(ex, ez, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+
+                // Small name label
+                ctx.font = 'bold 8px -apple-system, sans-serif';
+                ctx.fillStyle = '#34d399';
+                ctx.fillText(group.name ? group.name.substring(0, 3) : 'PL', ex + 4.5, ez + 2.5);
+              }
+            });
+
             // --- DRAW SPECIAL TREASURE MARKERS FOR MINI-MAP ---
             if (optsRef.current.mode === 'treasure') {
               // 1. Draw Keys (from active key_collectible entities list)
@@ -1488,6 +1527,62 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             }
 
             ctx.restore();
+          }
+        }
+
+        // --- COMPUTE ACTIVE TEAMMATE OVERLAYS & ARROWS ---
+        if (remotePlayers && remotePlayers.size > 0) {
+          const indicators: any[] = [];
+          const frustum = new THREE.Frustum();
+          const projScreenMatrix = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+          frustum.setFromProjectionMatrix(projScreenMatrix);
+
+          remotePlayers.forEach((group, id) => {
+            const tPos = new THREE.Vector3().copy(group.position);
+            tPos.y += 1.8; // Target above teammate head
+
+            const dist = pInst.pos.distanceTo(group.position);
+            
+            // Project the 3D position to 2D screen NDC [-1, 1] range
+            const projected = new THREE.Vector3().copy(tPos).project(cam);
+            
+            // Calculate direction relative to camera local orientation
+            const localV = new THREE.Vector3().copy(group.position).applyMatrix4(cam.matrixWorldInverse);
+            const angle = Math.atan2(localV.x, -localV.z);
+
+            // Is the teammate on-screen in front of the camera?
+            const inFrustum = frustum.containsPoint(tPos);
+            const onScreen = inFrustum && projected.z <= 1;
+
+            if (onScreen) {
+              const x = (projected.x * 0.5 + 0.5) * 100;
+              const y = (-projected.y * 0.5 + 0.5) * 100;
+              indicators.push({
+                id,
+                name: group.name || 'Đồng đội',
+                dist: Math.round(dist),
+                screenX: x,
+                screenY: y,
+                onScreen: true,
+                angle
+              });
+            } else {
+              indicators.push({
+                id,
+                name: group.name || 'Đồng đội',
+                dist: Math.round(dist),
+                onScreen: false,
+                angle
+              });
+            }
+          });
+
+          if (fpsCnt.current % 3 === 0) {
+            setTeammates(indicators);
+          }
+        } else {
+          if (teammates.length > 0 && fpsCnt.current % 3 === 0) {
+            setTeammates([]);
           }
         }
 
@@ -1669,6 +1764,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         rendererRef.current.dispose();
       }
       entsRef.current.forEach(e => e.remove());
+      clearInterval(pingTimer);
       socketService.disconnect();
     };
   }, [isPlaying]);
@@ -2150,6 +2246,21 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 <span className="dot animate-pulse"></span>
                 <span>FPS {fps}</span><span className="hidden sm:inline">· {chunkCount}c Chunks</span>
               </div>
+              <div className="pill select-none font-mono">
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  ping === null ? 'bg-slate-500' :
+                  ping < 60 ? 'bg-emerald-400' :
+                  ping < 150 ? 'bg-amber-400' : 'bg-rose-500'
+                } animate-pulse`} />
+                <span className="text-[10px] text-slate-400 font-sans">PING:</span>
+                <span className={`font-semibold ${
+                  ping === null ? 'text-slate-400' :
+                  ping < 60 ? 'text-emerald-400' :
+                  ping < 150 ? 'text-amber-400' : 'text-rose-400'
+                }`}>
+                  {ping === null ? '...' : `${ping}ms`}
+                </span>
+              </div>
               <div className="pill select-none font-mono font-medium hidden sm:flex">
                 📍 {coordsText}
               </div>
@@ -2310,6 +2421,55 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70 select-none">W</span>
             <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70 select-none">E</span>
           </div>
+
+          {/* TEAMMATE RADAR DIRECTIONAL TRACKING HUD SYSTEM */}
+          {teammates.map((peer) => {
+            if (peer.onScreen) {
+              return (
+                <div
+                  key={peer.id}
+                  className="absolute pointer-events-none z-30 select-none -translate-x-1/2 -translate-y-[120%] flex flex-col items-center animate-fade-in"
+                  style={{ left: `${peer.screenX}%`, top: `${peer.screenY}%` }}
+                >
+                  {/* Visual name card with distance */}
+                  <div className="bg-slate-950/90 border border-emerald-500/70 p-1 px-2.5 rounded-lg shadow-2xl flex items-center gap-1.5 backdrop-blur-sm">
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-extrabold text-emerald-300 font-sans tracking-wide leading-none">
+                      {peer.name} : {peer.dist}m
+                    </span>
+                  </div>
+                  {/* Arrow Indicator pointing down to teammate's avatar */}
+                  <span className="text-emerald-400 text-sm font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] filter select-none animate-bounce">
+                    ▼
+                  </span>
+                </div>
+              );
+            } else {
+              // Off-screen indicator positioned circularly around the viewport edges (ept)
+              const screenRadius = 38; // clamp distance inside the viewport boundaries
+              const cx = 50 + Math.sin(peer.angle) * screenRadius;
+              const cy = 50 - Math.cos(peer.angle) * screenRadius;
+              const rotDeg = Math.round(peer.angle * (180 / Math.PI));
+
+              return (
+                <div
+                  key={peer.id}
+                  className="absolute pointer-events-none z-30 select-none -translate-x-1/2 -translate-y-1/2 bg-slate-950/95 border border-emerald-400/80 p-1.5 px-2 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.2)] flex items-center gap-1.5 backdrop-blur"
+                  style={{ left: `${cx}%`, top: `${cy}%` }}
+                >
+                  <span
+                    className="text-emerald-400 text-xs font-black block select-none transform transition-transform"
+                    style={{ transform: `rotate(${rotDeg}deg)` }}
+                  >
+                    ▲
+                  </span>
+                  <span className="text-[9px] font-bold text-emerald-300 tracking-wider font-sans leading-none uppercase">
+                    {peer.name.substring(0, 6)}: {peer.dist}m
+                  </span>
+                </div>
+              );
+            }
+          })}
 
           {/* Display screen Crosshair targeting point */}
           <div className="ch"></div>
