@@ -214,6 +214,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [equippedArmorList, setEquippedArmorList] = useState<string[]>([]);
   const [showTreasureGuide, setShowTreasureGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [flashlightActive, setFlashlightActive] = useState(false);
+  const [proximityWarning, setProximityWarning] = useState<{ name: string; dist: number; type: 'key' | 'chest' } | null>(null);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -294,6 +296,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   
   // Instance engines
   const prevWasNight = useRef<boolean>(false);
+  const prevWasNightForFlashlight = useRef<boolean>(false);
   const nightsSurvivedRef = useRef<number>(1);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const camRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -303,6 +306,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const dnRef = useRef<DN | null>(null);
   const entsRef = useRef<Entity[]>([]);
   const hlRef = useRef<THREE.LineSegments | null>(null);
+  const flashlightRef = useRef<THREE.SpotLight | null>(null);
+  const flashlightActiveRef = useRef<boolean>(false);
+  const radarBeepTimer = useRef<number>(0);
   
   // Dynamic parameters
   const lastTimeRef = useRef<number>(0);
@@ -423,6 +429,10 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     } catch (err) { }
   }, []);
 
+  useEffect(() => {
+    flashlightActiveRef.current = flashlightActive;
+  }, [flashlightActive]);
+
   /* ─── Initialize Core Canvas & Game loop ─── */
   useEffect(() => {
     if (!isPlaying) return;
@@ -453,6 +463,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     // 2. Instantiate procedural engine components
     const dn = new DN(scene, isTreasure);
     dnRef.current = dn;
+
+    // Flashlight SpotLight instance
+    const fLight = new THREE.SpotLight(0xfff9e6, 5.0, 50, Math.PI / 4.5, 0.4, 0.8);
+    fLight.visible = false;
+    scene.add(fLight);
+    scene.add(fLight.target);
+    flashlightRef.current = fLight;
 
     const wgen = new WGen(opts.seed, activeBiome);
     const cmgr = new CM(scene, wgen);
@@ -742,6 +759,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       if (e.code === 'KeyP') {
         saveGameData();
         triggerToast('💾 Đã lưu dữ liệu thế giới!');
+      }
+      if (e.code === 'KeyL') {
+        setFlashlightActive(prev => {
+          const next = !prev;
+          triggerToast('Đèn Pin: ' + (next ? 'BẬT 🔦 (L)' : 'TẮT 🔇'));
+          return next;
+        });
       }
       if (e.code === 'Escape') {
         setInventoryActive(false);
@@ -1099,6 +1123,84 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         
         const currentNightStatus = dInst.night();
         setIsNight(currentNightStatus);
+
+        // Flashlight automatic night turn-on & direction tracking
+        if (currentNightStatus && !prevWasNightForFlashlight.current) {
+          prevWasNightForFlashlight.current = true;
+          setFlashlightActive(true);
+          triggerToast('🌙 Trời đã tối! Đèn Pin đã tự động kích hoạt giúp soi sáng (Phím L để tắt/bật)');
+        } else if (!currentNightStatus && prevWasNightForFlashlight.current) {
+          prevWasNightForFlashlight.current = false;
+        }
+
+        const fLightObj = flashlightRef.current;
+        if (fLightObj && camRef.current) {
+          if (flashlightActiveRef.current) {
+            fLightObj.visible = true;
+            fLightObj.position.copy(camRef.current.position);
+            
+            // Point Spotlight forward along look direction
+            const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pInst.pitch, pInst.yaw, 0, 'YXZ')).normalize();
+            fLightObj.target.position.copy(camRef.current.position).add(dir);
+            fLightObj.target.updateMatrixWorld();
+          } else {
+            fLightObj.visible = false;
+          }
+        }
+
+        // Radar proximity warning alerts for Key Shrines / ancient chest (mode: treasure)
+        if (optsRef.current.mode === 'treasure' && pInst) {
+          const radarTargets = [
+            { name: 'Đền Thờ Phía Tây 🔑', x: 15, y: 33, z: 85, type: 'key' as const },
+            { name: 'Đền Thờ Phía Đông 🔑', x: 85, y: 33, z: 15, type: 'key' as const },
+            { name: 'Đền Thờ Trung Tâm 🔑', x: 95, y: 33, z: 95, type: 'key' as const },
+            { name: 'Phế Tích Cổ Tự Vương Rương Thủy Tổ 🎁', x: 115, y: 12, z: 115, type: 'chest' as const }
+          ];
+
+          let nearestWarn: { name: string; dist: number; type: 'key' | 'chest' } | null = null;
+          let minD = Infinity;
+
+          for (const tgt of radarTargets) {
+            const tgtPos = new THREE.Vector3(tgt.x, tgt.y, tgt.z);
+            const distance = pInst.pos.distanceTo(tgtPos);
+            
+            if (distance < 35 && distance < minD) {
+              minD = distance;
+              nearestWarn = { name: tgt.name, dist: Math.round(distance), type: tgt.type };
+            }
+          }
+
+          if (nearestWarn) {
+            let beepInterval = 1.2;
+            let pitch = 880; 
+            if (nearestWarn.type === 'chest') {
+              pitch = 1100;
+            }
+            if (nearestWarn.dist < 8) {
+              beepInterval = 0.25; 
+            } else if (nearestWarn.dist < 18) {
+              beepInterval = 0.6;
+            }
+
+            radarBeepTimer.current += dt;
+            if (radarBeepTimer.current >= beepInterval) {
+              radarBeepTimer.current = 0;
+              synth.playRadarBeep(pitch);
+            }
+          } else {
+            radarBeepTimer.current = 0;
+          }
+
+          setProximityWarning(prev => {
+            if (!prev && !nearestWarn) return null;
+            if (prev && nearestWarn && prev.name === nearestWarn.name && prev.dist === nearestWarn.dist) {
+              return prev;
+            }
+            return nearestWarn;
+          });
+        } else {
+          setProximityWarning(null);
+        }
 
         if (prevWasNight.current !== currentNightStatus) {
           prevWasNight.current = currentNightStatus;
@@ -1933,6 +2035,33 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       {/* ─── 3. INTERACTIVE HUD OVERLAYS ─── */}
       {isPlaying && (
         <div id="hud" className="on font-sans">
+          {/* Proximity Warning Alerts / Radar HUD Panel */}
+          {proximityWarning && (
+            <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-30 w-full max-w-sm px-4 animate-bounce select-none pointer-events-none">
+              <div className={`p-3 rounded-2xl border-2 flex flex-col items-center justify-center text-center shadow-2xl backdrop-blur-md ${
+                proximityWarning.type === 'chest' 
+                  ? 'bg-red-950/80 border-red-500 text-red-100' 
+                  : 'bg-amber-950/85 border-amber-500 text-amber-200'
+              }`}>
+                <div className="flex items-center gap-2 mb-1 justify-center">
+                  <span className="text-lg animate-pulse">{proximityWarning.type === 'chest' ? '🚨🚨' : '📡📡'}</span>
+                  <span className="font-black text-[11px] tracking-widest uppercase">
+                    {proximityWarning.type === 'chest' ? 'BÁO ĐỘNG CẬN KỀ' : 'TÍN HIỆU RADAR'}
+                  </span>
+                </div>
+                <p className="text-xs font-bold leading-normal mb-0.5">
+                  Đang đến rất gần {proximityWarning.name}!
+                </p>
+                <div className="flex items-baseline gap-1 mt-0.5 justify-center">
+                  <span className="text-[10px] opacity-75">Khoảng cách:</span>
+                  <span className="text-sm font-black font-mono text-white animate-pulse">
+                    {proximityWarning.dist}m
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Top diagnostic panel bar */}
           <div className="tbar flex-wrap">
             <div className="flex flex-wrap items-center gap-2">
@@ -2810,6 +2939,45 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               🚀 BẮT ĐẦU CHẠY CHIẾN DỊCH 🚀
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ─── HUD TOP BUTTONS OVERLAY ROW ─── */}
+      {isPlaying && (
+        <div className="absolute top-4 right-16 z-20 flex items-center gap-2 select-none pointer-events-auto">
+          {/* Flashlight button */}
+          <button
+            onClick={() => {
+              setFlashlightActive(prev => {
+                const next = !prev;
+                triggerToast('Đèn Pin: ' + (next ? 'BẬT 🔦 (L)' : 'TẮT 🔇'));
+                return next;
+              });
+            }}
+            className={`h-10 px-3 bg-slate-900/95 border-2 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all shadow-xl active:scale-95 cursor-pointer ${
+              flashlightActive 
+                ? 'border-yellow-400 text-yellow-300 shadow-yellow-500/10' 
+                : 'border-slate-700 text-slate-400 opacity-80 hover:opacity-100 hover:border-slate-500'
+            }`}
+            title="Bật/Tắt Đèn pin (Phím L)"
+          >
+            <span>🔦 {flashlightActive ? 'Đèn: BẬT' : 'Đèn: TẮT'}</span>
+            <span className="opacity-50 text-[9px] font-mono px-1 bg-slate-950/80 rounded">[L]</span>
+          </button>
+
+          {/* Treasure hunt guidance button */}
+          {opts.mode === 'treasure' && (
+            <button
+              onClick={() => {
+                synth.playPlace();
+                setShowTreasureGuide(true);
+              }}
+              className="h-10 px-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 hover:shadow-yellow-500/20 border-2 border-yellow-400 font-black text-xs tracking-wider rounded-xl flex items-center justify-center gap-1 shadow-xl transition-all cursor-pointer active:scale-95"
+              title="Xem cẩm nang bản đồ và tọa độ chìa khóa"
+            >
+              📖 HƯỚNG DẪN
+            </button>
+          )}
         </div>
       )}
 
