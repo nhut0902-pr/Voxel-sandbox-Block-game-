@@ -216,6 +216,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [showSettings, setShowSettings] = useState(false);
   const [flashlightActive, setFlashlightActive] = useState(false);
   const [proximityWarning, setProximityWarning] = useState<{ name: string; dist: number; type: 'key' | 'chest' } | null>(null);
+  const [showSOSModal, setShowSOSModal] = useState(false);
+  const [invincibleSeconds, setInvincibleSeconds] = useState(0);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -733,6 +735,18 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       const z = 8 + Math.sin(a) * r;
       ents.push(new Entity(tp, x, wgen.h(~~x, ~~z) + 1, z, scene));
     }
+
+    if (optsRef.current.mode === 'treasure') {
+      const keysLocations = [
+        { x: 15, y: 37, z: 85 },
+        { x: 85, y: 37, z: 15 },
+        { x: 95, y: 37, z: 95 }
+      ];
+      keysLocations.forEach(loc => {
+        ents.push(new Entity('key_collectible', loc.x, loc.y, loc.z, scene));
+      });
+    }
+
     entsRef.current = ents;
 
     // 6. Bind keyboard & mouse standard inputs
@@ -1329,6 +1343,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         setXpPercent((pInst.xp / (pInst.lv * 100)) * 100);
         setOxygen(pInst.oxygen);
         setEquippedArmorList(pInst.equippedArmor || []);
+        setInvincibleSeconds(Math.ceil(pInst.invincibleShieldT || 0));
 
         // Update FPS HUD diagnostic label
         fpsAcc.current += dt;
@@ -1406,6 +1421,72 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 ctx.fillRect(ex - 1.5, ez - 1.5, 3, 3);
               }
             });
+
+            // --- DRAW SPECIAL TREASURE MARKERS FOR MINI-MAP ---
+            if (optsRef.current.mode === 'treasure') {
+              // 1. Draw Keys (from active key_collectible entities list)
+              entsRef.current.forEach(e => {
+                if (e.type === 'key_collectible' && !e.dead) {
+                  const kx = e.pos.x;
+                  const kz = e.pos.z;
+                  const kex = (kx - px + r) * scale;
+                  const kez = (kz - pz + r) * scale;
+                  const kdx_px = kex - size / 2;
+                  const kdz_px = kez - size / 2;
+                  const klen = Math.hypot(kdx_px, kdz_px);
+                  
+                  ctx.fillStyle = '#fbbf24'; // beautiful gold key color
+                  if (klen <= size / 2) {
+                    ctx.beginPath();
+                    ctx.arc(kex, kez, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.font = '11px -apple-system, sans-serif';
+                    ctx.fillText('🔑', kex - 5.5, kez - 5);
+                  } else {
+                    const nx = kdx_px / klen;
+                    const nz = kdz_px / klen;
+                    const edgeDist = size / 2 - 5;
+                    const bX = size / 2 + nx * edgeDist;
+                    const bY = size / 2 + nz * edgeDist;
+                    
+                    ctx.beginPath();
+                    ctx.arc(bX, bY, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.font = '9px -apple-system, sans-serif';
+                    ctx.fillText('🔑', bX - 4.5, bY - 4.5);
+                  }
+                }
+              });
+
+              // 2. Draw Legendary Chest at X=115, Z=115
+              const cx_coord = 115;
+              const cz_coord = 115;
+              const cex = (cx_coord - px + r) * scale;
+              const cez = (cz_coord - pz + r) * scale;
+              const cdx_px = cex - size / 2;
+              const cdz_px = cez - size / 2;
+              const clen = Math.hypot(cdx_px, cdz_px);
+
+              ctx.fillStyle = '#f43f5e'; // beautiful chest rose color
+              if (clen <= size / 2) {
+                ctx.fillRect(cex - 3, cez - 3, 6, 6);
+                ctx.font = '11px -apple-system, sans-serif';
+                ctx.fillText('🎁', cex - 5.5, cez - 5);
+              } else {
+                const nx = cdx_px / clen;
+                const nz = cdz_px / clen;
+                const edgeDist = size / 2 - 5;
+                const bX = size / 2 + nx * edgeDist;
+                const bY = size / 2 + nz * edgeDist;
+                
+                ctx.beginPath();
+                ctx.arc(bX, bY, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.font = '9px -apple-system, sans-serif';
+                ctx.fillText('🎁', bX - 4.5, bY - 4.5);
+              }
+            }
+
             ctx.restore();
           }
         }
@@ -2967,17 +3048,177 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
           {/* Treasure hunt guidance button */}
           {opts.mode === 'treasure' && (
-            <button
-              onClick={() => {
-                synth.playPlace();
-                setShowTreasureGuide(true);
-              }}
-              className="h-10 px-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 hover:shadow-yellow-500/20 border-2 border-yellow-400 font-black text-xs tracking-wider rounded-xl flex items-center justify-center gap-1 shadow-xl transition-all cursor-pointer active:scale-95"
-              title="Xem cẩm nang bản đồ và tọa độ chìa khóa"
-            >
-              📖 HƯỚNG DẪN
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  synth.playPlace();
+                  setShowTreasureGuide(true);
+                }}
+                className="h-10 px-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 hover:shadow-yellow-500/20 border-2 border-yellow-400 font-extrabold text-xs tracking-wider rounded-xl flex items-center justify-center gap-1 shadow-xl transition-all cursor-pointer active:scale-95 text-center"
+                title="Xem cẩm nang bản đồ và tọa độ chìa khóa"
+              >
+                📖 HƯỚNG DẪN
+              </button>
+
+              <button
+                onClick={() => {
+                  synth.playPlace();
+                  setShowSOSModal(true);
+                }}
+                className="h-10 px-3 flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-2 border-rose-500 text-white font-extrabold text-xs tracking-wider rounded-xl shadow-xl transition-all cursor-pointer active:scale-95 animate-pulse text-center"
+                title="Khẩn cấp tiếp tế, bảo vệ & thoát hiểm hiểm nghèo"
+              >
+                🚨 SOS CỨU TRỢ
+              </button>
+            </>
           )}
+        </div>
+      )}
+
+      {/* ─── SOS SHIELD VISUAL OVERLAY HALO ─── */}
+      {isPlaying && invincibleSeconds > 0 && (
+        <div className="absolute inset-0 z-40 border-[10px] sm:border-[16px] border-amber-500/25 pointer-events-none animate-pulse flex items-start justify-center pt-24 select-none">
+          <div className="bg-amber-950/95 border-2 border-amber-500/60 text-amber-200 px-4 py-2 rounded-2xl font-black text-xs tracking-wider shadow-2xl flex items-center gap-2">
+            <span className="animate-spin text-sm">🛡️</span>
+            <span>HÀO QUANG SOS BẢO VỆ ĐANG KÍCH HOẠT: {invincibleSeconds} giây</span>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SOS EMERGENCY RECOVERY MODAL SELECTION SCREEN ─── */}
+      {isPlaying && showSOSModal && (
+        <div className="absolute inset-0 z-[75] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto select-none font-sans animate-fade-in text-slate-200">
+          <div className="max-w-md w-full bg-slate-900 border-2 border-red-500 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+            {/* Ambient design gradients */}
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer text-xl font-bold font-mono" onClick={() => {
+              synth.playPlace();
+              setShowSOSModal(false);
+            }}>✕</div>
+            
+            <div className="flex items-center gap-3 border-b border-red-900/50 pb-4 mb-5">
+              <span className="text-3xl animate-bounce">🚨</span>
+              <div>
+                <h3 className="text-base md:text-lg font-black text-red-500 uppercase tracking-widest leading-none">HỆ THỐNG CỨU TRỢ SOS</h3>
+                <p className="text-[10px] text-slate-400 font-medium mt-1 leading-none">Chế độ Hỗ Trợ Độc Quyền cho Truy Tìm Kho Báu</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed mb-4">
+              Hệ thống SOS hỏa tốc đã được kết nối! Nếu bạn đang gặp tình thế nguy hại cạn kiệt, hãy kích hoạt các đặc quyền dưới đây để cứu mạng:
+            </p>
+
+            <div className="space-y-3.5">
+              {/* Option 1: Instashield + supplies */}
+              <button
+                onClick={() => {
+                  const pInst = playerRef.current;
+                  if (pInst) {
+                    pInst.hp = pInst.mhp; // Full HP
+                    pInst.hunger = 100; // Full hunger
+                    pInst.invincibleShieldT = 15; // 15 seconds shield
+                    setHp(pInst.hp);
+                    setHunger(pInst.hunger);
+                    setInvincibleSeconds(15);
+                    
+                    // Give bread and blocks
+                    setBagItems(prev => {
+                      const updated = { ...prev };
+                      updated['bread'] = (updated['bread'] || 0) + 12; // 12 emergency bread
+                      updated['5'] = (updated['5'] || 0) + 40; // 40 Bricks blocks to build safety pillars
+                      return updated;
+                    });
+                    
+                    triggerToast('🛡️ SOS: Đã kích hoạt 15 giây Hào Quang Vô Song & tiếp tế lương thực!');
+                    synth.playCollect();
+                    setShowSOSModal(false);
+                  }
+                }}
+                className="w-full p-3.5 bg-gradient-to-r from-amber-950/80 to-amber-900/40 hover:from-amber-900 hover:to-amber-800 border-2 border-amber-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">🛡️</span>
+                  <span className="font-extrabold text-xs text-amber-300 uppercase tracking-wide group-hover:text-amber-200">Hào Quang Khiên & Tiếp Tế Hoả Tốc</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal pl-7">
+                  Hồi ngay <strong className="text-white">100% Máu & Thức Ăn</strong>, tiếp viện <strong className="text-white">12 Bánh mì</strong>, <strong className="text-white">40 Khối gạch</strong> & kích hoạt <strong className="text-amber-400">Khiên Bất Tử trong 15s</strong> miễn nhiễm thây ma.
+                </p>
+              </button>
+
+              {/* Option 2: Teleport Home */}
+              <button
+                onClick={() => {
+                  const pInst = playerRef.current;
+                  if (pInst && chunkMgrRef.current) {
+                    const wgenInstance = chunkMgrRef.current.wg;
+                    const homeH = wgenInstance.h(8, 8);
+                    
+                    pInst.pos.set(8, homeH + 3.5, 8);
+                    pInst.vel.set(0, 0, 0);
+                    pInst.invincibleShieldT = 8; // grant 8 seconds safety shield
+                    setInvincibleSeconds(8);
+                    
+                    triggerToast('🚀 SOS: Đã dịch chuyển khẩn cấp về đồi xuất phát an toàn [+8s Khiên]!');
+                    synth.playPlace();
+                    setShowSOSModal(false);
+                  }
+                }}
+                className="w-full p-3.5 bg-gradient-to-r from-rose-950/80 to-rose-900/40 hover:from-rose-900 hover:to-rose-800 border-2 border-rose-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">🚀</span>
+                  <span className="font-extrabold text-xs text-rose-300 uppercase tracking-wide group-hover:text-rose-200">Khẩn Cấp Di Trú Về Đồi Xuất Phát</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal pl-7">
+                  Ngắt trạng thái nguy hiểm & <strong className="text-white">Biến về đồi xuất phát</strong> an toàn tọa độ [8, 8], kèm <strong className="text-rose-400">8 giây Khiên bảo vệ</strong> để định hình lại lối chơi.
+                </p>
+              </button>
+
+              {/* Option 3: Super Gold Funding */}
+              <button
+                onClick={() => {
+                  const pInst = playerRef.current;
+                  if (pInst) {
+                    pInst.gold += 350; // Give 350 coins
+                    setGoldCount(pInst.gold);
+                    
+                    setBagItems(prev => {
+                      const updated = { ...prev };
+                      if (!updated['knife']) updated['knife'] = 1; // steel dagger rescue
+                      return updated;
+                    });
+                    
+                    triggerToast('🪙 SOS: Thêm ngân lượng khẩn cấp (+350 vàng) & Dao Thép chuyên dụng!');
+                    synth.playCollect();
+                    setShowSOSModal(false);
+                  }
+                }}
+                className="w-full p-3.5 bg-gradient-to-r from-emerald-950/80 to-emerald-900/40 hover:from-emerald-900 hover:to-emerald-800 border-2 border-emerald-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">🪙</span>
+                  <span className="font-extrabold text-xs text-emerald-300 uppercase tracking-wide group-hover:text-emerald-200">Tiếp Tế Ngân Lượng & Siêu Dao Thân Thủ</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal pl-7">
+                  Cung cấp ngay <strong className="text-emerald-400">+350 Vàng</strong> để bạn nâng cấp trang bị chống chịu & cấp <strong className="text-white">Dao Thép (Sát thương 6)</strong> để nghênh chiến sinh tồn!
+                </p>
+              </button>
+            </div>
+
+            <div className="text-center mt-5">
+              <button
+                onClick={() => {
+                  synth.playPlace();
+                  setShowSOSModal(false);
+                }}
+                className="px-5 py-2 bg-slate-950 border border-slate-800 rounded-xl hover:bg-slate-800 text-[10px] uppercase font-bold tracking-widest text-slate-400 hover:text-white transition-colors"
+              >
+                Hủy Yêu Cầu Cứu Trợ
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

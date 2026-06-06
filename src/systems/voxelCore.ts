@@ -625,6 +625,7 @@ export class Player {
   lastH: number;
   oxygen: number;
   equippedArmor: string[];
+  invincibleShieldT?: number;
 
   constructor(cam: THREE.PerspectiveCamera) {
     this.cam = cam;
@@ -653,6 +654,7 @@ export class Player {
     this.lastH = 0;
     this.oxygen = 100;
     this.equippedArmor = [];
+    this.invincibleShieldT = 0;
   }
 
   look(): void {
@@ -664,6 +666,9 @@ export class Player {
 
   upd(dt: number, inp: any, world: CM, mode: string, onDie: (src: string) => void): void {
     if (this.dead) return;
+    if (this.invincibleShieldT !== undefined && this.invincibleShieldT > 0) {
+      this.invincibleShieldT = Math.max(0, this.invincibleShieldT - dt);
+    }
     const fw = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const rt = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     const mv = new THREE.Vector3();
@@ -766,6 +771,7 @@ export class Player {
 
   dmg(amt: number, src: string, onDie: (src: string) => void): boolean {
     if (this.dead) return false;
+    if (this.invincibleShieldT !== undefined && this.invincibleShieldT > 0) return false; // SOS invincible check
     const n = performance.now();
     if (n - this.lastH < 450) return false;
     this.lastH = n;
