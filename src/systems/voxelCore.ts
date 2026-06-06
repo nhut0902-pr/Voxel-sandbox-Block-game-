@@ -29,13 +29,16 @@ export const BLK: Record<number, BlockDef> = {
   10: { n: 'glass', s: 1, tr: 1, c: 0xcde6ff, e: '🔵' },
   11: { n: 'obsidian', s: 1, c: 0x231632, e: '⬛' },
   12: { n: 'cherry', s: 1, c: 0xf3a7c8, e: '🌸' },
+  13: { n: 'lava', s: 0, tr: 1, c: 0xff3700, e: '🔥' },
   14: { n: 'gold ore', s: 1, c: 0xd9b441, e: '🥇' },
   15: { n: 'diamond', s: 1, c: 0x5be0d2, e: '💎' },
   16: { n: 'brick', s: 1, c: 0xb34a3c, e: '🧱' },
   17: { n: 'planks', s: 1, c: 0xc4903d, e: '🪟' },
+  18: { n: 'treasure chest', s: 1, c: 0xd9a741, e: '🎁' },
+  19: { n: 'gold key block', s: 1, c: 0xffd700, e: '🔑' },
 };
 
-export const BL = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17];
+export const BL = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 
 export interface ItemDef {
   id: string;
@@ -63,12 +66,15 @@ export const ITM: Record<string, ItemDef> = {
   shield: { id: 'shield', n: 'Khiên', e: '🛡️', def: 3, t: 'armor' },
   helm: { id: 'helm', n: 'Nón', e: '⛑️', def: 2, t: 'armor' },
   boots: { id: 'boots', n: 'Bốt', e: '👟', spd: 2, t: 'armor' },
+  scuba: { id: 'scuba', n: 'Mũ Lặn Ô-xy', e: '🤿', def: 1, t: 'armor' },
+  fireproof: { id: 'fireproof', n: 'Giáp Chống Lửa', e: '🧑‍🚒', def: 1, t: 'armor' },
   bread: { id: 'bread', n: 'Bánh Mì', e: '🍞', hg: 4, t: 'food' },
   apple: { id: 'apple', n: 'Táo', e: '🍎', hg: 3, hl: 2, t: 'food' },
   meat: { id: 'meat', n: 'Thịt', e: '🍖', hg: 6, hl: 3, t: 'food' },
   pot_hp: { id: 'pot_hp', n: 'Thuốc HP', e: '🧪', hl: 10, t: 'potion' },
   pot_spd: { id: 'pot_spd', n: 'Thuốc Tốc', e: '⚗️', spd: 5, t: 'potion' },
   wings: { id: 'wings', n: 'Cánh', e: '🪽', fly: true, t: 'special' },
+  key: { id: 'key', n: 'Chìa khóa vàng', e: '🔑', t: 'special' },
 };
 
 export interface ShopItem {
@@ -88,7 +94,7 @@ export const SHOP: Record<string, ShopItem[]> = {
   ],
   tools: [{ id: 'axe', p: 20 }, { id: 'pick', p: 25 }],
   food: [{ id: 'bread', p: 8 }, { id: 'apple', p: 6 }, { id: 'meat', p: 15 }, { id: 'pot_hp', p: 25 }, { id: 'pot_spd', p: 35 }],
-  special: [{ id: 'shield', p: 60 }, { id: 'helm', p: 70 }, { id: 'boots', p: 55 }, { id: 'wings', p: 300 }],
+  special: [{ id: 'shield', p: 60 }, { id: 'helm', p: 70 }, { id: 'boots', p: 55 }, { id: 'wings', p: 300 }, { id: 'scuba', p: 120 }, { id: 'fireproof', p: 160 }],
 };
 
 /* ─── Math Utilities ─── */
@@ -201,12 +207,21 @@ export class WGen {
   }
 
   h(wx: number, wz: number): number {
+    // Near spawn safe beach island zone
+    const distToSpawn = Math.max(Math.abs(wx - 8), Math.abs(wz - 8));
+    if (distToSpawn < 12) {
+      if (this.biome === 'treasure_ocean') return 33; // High spawn island above sea level 30
+      if (this.biome === 'treasure_lava') return 33;  // Safe oasis above lava sea level 30
+    }
+
     const b = this.n1.fbm(wx * 0.012, wz * 0.012, 5, 2, 0.5);
     const m = Math.max(0, this.n1.fbm(wx * 0.003, wz * 0.003, 3) - 0.2) * 60;
     let h = 32 + b * 14 + m;
     if (this.biome === 'desert') h = 30 + b * 6;
     if (this.biome === 'snow') h = 40 + b * 20 + m;
     if (this.biome === 'volcano') h = 36 + b * 22 + m * 1.5;
+    if (this.biome === 'treasure_lava') h = 34 + b * 20 + m * 1.2;
+    if (this.biome === 'treasure_ocean') h = 10 + b * 8; // Deep seabed
     return Math.max(8, Math.min(120, ~~h));
   }
 
@@ -216,14 +231,21 @@ export class WGen {
       const cv = this.n2.fbm(wx * 0.05, wz * 0.05 + wy * 0.08, 3);
       if (cv > 0.55 && wy > 4 && wy < h - 3) return 0; // Cave
     }
-    if (wy > h) return wy <= this.SEA ? 5 : 0; // Sea water
+    if (wy > h) return wy <= this.SEA ? (this.biome === 'treasure_lava' ? 13 : 5) : 0; // Lava instead of water!
     if (wy === h) {
       if (this.biome === 'desert') return 4;
       if (this.biome === 'snow') return 8;
       if (this.biome === 'volcano') return wy > 50 ? 11 : 3;
+      if (this.biome === 'treasure_lava') return wy > 45 ? 11 : 3; // Obsidian spikes
+      if (this.biome === 'treasure_ocean') return 4; // Sandy seabed floor
       return wy <= this.SEA + 1 ? 4 : 1;
     }
-    if (wy > h - 4) return this.biome === 'desert' ? 4 : 2;
+    if (wy > h - 4) {
+      if (this.biome === 'desert') return 4;
+      if (this.biome === 'treasure_lava') return 11;
+      if (this.biome === 'treasure_ocean') return 4; // Sand core
+      return 2;
+    }
     if (wy < 12 && this.n2.n2(wx * 0.3, wz * 0.3 + wy * 0.2) > 0.55) return 15; // Diamond Ore
     if (wy < 24 && this.n2.n2(wx * 0.25 + wy * 0.1, wz * 0.25) > 0.5) return 14; // Gold Ore
     if (wy < 3) return 11; // Obsidian core floor
@@ -231,7 +253,7 @@ export class WGen {
   }
 
   isTree(wx: number, wz: number): boolean {
-    if (['desert', 'snow', 'volcano'].includes(this.biome)) return false;
+    if (['desert', 'snow', 'volcano', 'treasure_lava', 'treasure_ocean'].includes(this.biome)) return false;
     const r = Math.sin(wx * 12.9898 + wz * 78.233 + sh(this.seed)) * 43758.5453;
     return (r - ~~r) > 0.985;
   }
@@ -324,6 +346,85 @@ export class CM {
                   ck.set(lx, ly, lz2, lt);
                 }
               }
+            }
+          }
+        }
+
+        // Spawning chests & keys on dry ground
+        const isTreasureBiome = wg.biome === 'treasure_lava' || wg.biome === 'treasure_ocean';
+        if (h > wg.SEA && h < CH - 4 && !isTreasureBiome) {
+          const valSeed = wx * 31.415 + wz * 17.89 + sh(wg.seed);
+          const pseudoR = (Math.sin(valSeed) * 43758.5453) % 1;
+          const absR = Math.abs(pseudoR);
+          
+          // Ensure we don't spawn onto a tree trunk or leaves
+          if (ck.get(x, h + 1, z) === 0) {
+            if (absR < 0.003) {
+              ck.set(x, h + 1, z, 18); // Block 18: Treasure Chest 🎁
+            } else if (absR < 0.011) {
+              ck.set(x, h + 1, z, 19); // Block 19: Golden Key Block 🔑
+            }
+          }
+        }
+
+        // ─── Procedural Landmark Shrines for Treasure Hunt mode ───
+        if (isTreasureBiome) {
+          // Landmark coordinates
+          const isAltar1 = (wx === 15 && wz === 85);
+          const isAltar2 = (wx === 85 && wz === 15);
+          const isAltar3 = (wx === 95 && wz === 95);
+          const isChestChamber = (wx === 115 && wz === 115);
+
+          // Build a towering marble-obsidian pillar for Altar indicators
+          if (isAltar1 || isAltar2 || isAltar3) {
+            // Fill bottom levels to towering height (e.g. Y=35)
+            for (let ly = 1; ly <= 35; ly++) {
+              ck.set(x, ly, z, 11); // Obsidian column
+            }
+            ck.set(x, 36, z, 14); // Gold ore top cap!
+            
+            // Build visual helper cross-bridges around Altar top
+            for (let dx = -1; dx <= 1; dx++) {
+              for (let dz = -1; dz <= 1; dz++) {
+                const lx = x + dx, lz2 = z + dz;
+                if (lx >= 0 && lx < CW && lz2 >= 0 && lz2 < CW && ck.get(lx, 34, lz2) === 0) {
+                  ck.set(lx, 34, lz2, 11); // Safe obsidian bridge platform
+                }
+              }
+            }
+          }
+
+          // Build the final Legendary Sacred Chest Chamber
+          // Chest is located at X=115, Z=115. Let's sculpt around it!
+          // We carve out 7x7 air space between Y=10 and Y=18 centered at (115, 115)
+          const dxChest = wx - 1115; // relative check
+          const distChestX = Math.abs(wx - 115);
+          const distChestZ = Math.abs(wz - 115);
+          if (distChestX <= 3 && distChestZ <= 3) {
+            // First clear all natural stone/dirt and fill with air
+            for (let ly = 12; ly <= 20; ly++) {
+              ck.set(x, ly, z, 0); // Air
+            }
+            
+            // Core floor
+            ck.set(x, 11, z, 11); // Obsidian floor base
+            
+            // Build decorative gold-corner temple pillars around outer boundary of the chamber
+            if (distChestX === 3 || distChestZ === 3) {
+              // Thick column walls
+              for (let ly = 12; ly <= 19; ly++) {
+                ck.set(x, ly, z, Math.random() < 0.3 ? 14 : 11); // Gold + Obsidian pillars
+              }
+            }
+            
+            // Surround chest with ring of lava (Lava Map) or water (Ocean Map)
+            if (distChestX === 1 && distChestZ === 1) {
+              ck.set(x, 11, z, wg.biome === 'treasure_lava' ? 13 : 5); // Lava moat or Water moat!
+            }
+
+            // Finally, place the ultimate chest block Y = 11 (which is Block 18)
+            if (wx === 115 && wz === 115) {
+              ck.set(x, 12, z, 18); // Legendary Chest block!
             }
           }
         }
@@ -522,6 +623,8 @@ export class Player {
   spdB: number;
   wpn: ItemDef | null;
   lastH: number;
+  oxygen: number;
+  equippedArmor: string[];
 
   constructor(cam: THREE.PerspectiveCamera) {
     this.cam = cam;
@@ -548,6 +651,8 @@ export class Player {
     this.spdB = 0;
     this.wpn = null;
     this.lastH = 0;
+    this.oxygen = 100;
+    this.equippedArmor = [];
   }
 
   look(): void {
@@ -595,7 +700,44 @@ export class Player {
     this._mv('z', this.vel.z * dt, world);
     this.look();
 
-    if (mode === 'survival') {
+    // Lava (Dung nham) or Water (Nước) environmental damage and Oxygen logic
+    const px = Math.floor(this.pos.x);
+    const py = Math.floor(this.pos.y);
+    const pz = Math.floor(this.pos.z);
+    const standBlock = world.wGet(px, py, pz);
+    const belowBlock = world.wGet(px, py - 1, pz);
+    const headBlock = world.wGet(px, py + 1, pz);
+
+    const isLava = standBlock === 13 || belowBlock === 13 || headBlock === 13;
+    const isWater = standBlock === 5 || belowBlock === 5 || headBlock === 5;
+
+    // Lava burning damage - shielded by fireproof costume
+    if (isLava && mode !== 'creative') {
+      const hasFireproof = this.equippedArmor && this.equippedArmor.includes('fireproof');
+      if (!hasFireproof) {
+        this.dmg(3.5, 'Dung nham nóng bỏng 🔥', onDie);
+      }
+    }
+
+    // Oxygen consumption underwater
+    const isSubmerged = headBlock === 5 || (isWater && headBlock === 0 && standBlock === 5); // Submerged in water
+    if (isSubmerged && mode !== 'creative') {
+      const hasScuba = this.equippedArmor && this.equippedArmor.includes('scuba');
+      if (hasScuba) {
+        // Scuba maintains breath
+        this.oxygen = Math.min(100, this.oxygen + dt * 2);
+      } else {
+        this.oxygen = Math.max(0, this.oxygen - dt * 20); // Drowns in 5 seconds
+        if (this.oxygen <= 0) {
+          this.dmg(1.5, 'Ngạt nước dưới biển sâu 🛑🌊', onDie);
+        }
+      }
+    } else {
+      // Return to air regenerates oxygen rapid
+      this.oxygen = Math.min(100, this.oxygen + dt * 50);
+    }
+
+    if (mode === 'survival' || mode === 'treasure') {
       this.hunger = Math.max(0, this.hunger - dt * 0.005);
       if (this.hunger < 5) this.hp = Math.max(0, this.hp - dt * 0.35);
       
@@ -701,7 +843,8 @@ export const EC: Record<string, any> = {
   cow: { hp: 15, spd: 1.5, dmg: 0, c: 0xffffff, hc: 0xd4c0a0, hos: 0, gold: 3, xp: 3, w: 1.0, h: 1.4, e: '🐄' },
   pig: { hp: 10, spd: 1.8, dmg: 0, c: 0xf0b0b0, hc: 0xff9999, hos: 0, gold: 2, xp: 2, w: 0.9, h: 1.1, e: '🐷' },
   chicken: { hp: 4, spd: 2.0, dmg: 0, c: 0xffffff, hc: 0xffd700, hos: 0, gold: 1, xp: 1, w: 0.6, h: 0.8, e: '🐔' },
-  sheep: { hp: 8, spd: 1.6, dmg: 0, c: 0xe8e8e8, hc: 0xd4d4d4, hos: 0, gold: 2, xp: 2, w: 1.0, h: 1.2, e: '🐑' }
+  sheep: { hp: 8, spd: 1.6, dmg: 0, c: 0xe8e8e8, hc: 0xd4d4d4, hos: 0, gold: 2, xp: 2, w: 1.0, h: 1.2, e: '🐑' },
+  key_collectible: { hp: 9999, spd: 0, dmg: 0, c: 0xffd700, hc: 0xffd700, hos: 0, gold: 0, xp: 0, w: 0.5, h: 0.8, e: '🔑', key: true }
 };
 
 /* ─── Voxel Entity Instance Class ─── */
@@ -731,25 +874,67 @@ export class Entity {
     this.aCD = 0;
     this.wd = null;
     this._ph = Math.random() * Math.PI * 2;
-    const c = this.cfg;
-    this.mesh = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, c.w), new THREE.MeshLambertMaterial({ color: c.c }));
-    this.head = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.9, c.w * 0.9, c.w * 0.9), new THREE.MeshLambertMaterial({ color: c.hc }));
-    this.head.position.set(0, c.h / 2 + c.w * 0.45, 0);
-    this.mesh.add(this.head);
-
-    if (c.hos) {
-      const em = new THREE.MeshBasicMaterial({ color: 0xff2200 });
-      const eg = new THREE.BoxGeometry(0.09, 0.09, 0.09);
-      const el = new THREE.Mesh(eg, em);
-      el.position.set(-c.w * 0.18, 0, -c.w * 0.46);
-      const er = new THREE.Mesh(eg, em);
-      er.position.set(c.w * 0.18, 0, -c.w * 0.46);
-      this.head.add(el);
-      this.head.add(er);
-    }
-    this.mesh.position.set(x, y + c.h / 2, z);
-    scene.add(this.mesh);
     this.scene = scene;
+
+    if (type === 'key_collectible') {
+      // Create a gorgeous blocky gold key Group
+      const gGroup = new THREE.Group();
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: 0xffd700,
+        metalness: 0.9,
+        roughness: 0.1,
+        emissive: 0x3d3000
+      });
+      // Stem shaft
+      const stem = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), goldMat);
+      stem.position.set(0, 0, 0);
+      gGroup.add(stem);
+
+      // Handle loop (ring parts)
+      const topB = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.1), goldMat);
+      topB.position.set(0, 0.35, 0);
+      gGroup.add(topB);
+      const botB = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.1), goldMat);
+      botB.position.set(0, 0.15, 0);
+      gGroup.add(botB);
+      const leftB = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.1), goldMat);
+      leftB.position.set(-0.135, 0.25, 0);
+      gGroup.add(leftB);
+      const rightB = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.1), goldMat);
+      rightB.position.set(0.135, 0.25, 0);
+      gGroup.add(rightB);
+
+      // Teeth
+      const tooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.1), goldMat);
+      tooth1.position.set(0.12, -0.12, 0);
+      gGroup.add(tooth1);
+      const tooth2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.1), goldMat);
+      tooth2.position.set(0.10, -0.22, 0);
+      gGroup.add(tooth2);
+
+      this.mesh = gGroup as any;
+      this.head = null as any;
+      scene.add(this.mesh);
+    } else {
+      const c = this.cfg;
+      this.mesh = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, c.w), new THREE.MeshLambertMaterial({ color: c.c }));
+      this.head = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.9, c.w * 0.9, c.w * 0.9), new THREE.MeshLambertMaterial({ color: c.hc }));
+      this.head.position.set(0, c.h / 2 + c.w * 0.45, 0);
+      this.mesh.add(this.head);
+
+      if (c.hos) {
+        const em = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+        const eg = new THREE.BoxGeometry(0.09, 0.09, 0.09);
+        const el = new THREE.Mesh(eg, em);
+        el.position.set(-c.w * 0.18, 0, -c.w * 0.46);
+        const er = new THREE.Mesh(eg, em);
+        er.position.set(c.w * 0.18, 0, -c.w * 0.46);
+        this.head.add(el);
+        this.head.add(er);
+      }
+      this.mesh.position.set(x, y + c.h / 2, z);
+      scene.add(this.mesh);
+    }
   }
 
   hit(amt: number): boolean {
@@ -764,8 +949,33 @@ export class Entity {
     return this.hp <= 0;
   }
 
-  upd(dt: number, player: Player, world: CM, onHitPlayer: (dmg: number, src: string) => void, onBoom: () => void): void {
+  upd(dt: number, player: Player, world: CM, onHitPlayer: (dmg: number, src: string) => void, onBoom: () => void, isNight?: boolean): void {
     if (this.dead) return;
+
+    // Direct sunlight burn check for hostile mob types in survival
+    if (isNight === false && this.cfg.hos) {
+      let shielded = false;
+      const sx = ~~this.pos.x;
+      const sy = Math.ceil(this.pos.y) + 1;
+      const sz = ~~this.pos.z;
+      for (let y = sy; y < sy + 15; y++) {
+        if (world.wGet(sx, y, sz)) {
+          shielded = true;
+          break;
+        }
+      }
+      if (!shielded) {
+        // Burn high rate
+        this.hit(dt * 3.5);
+        this.pos.y += Math.sin(performance.now() * 0.1) * 0.01; // Panic jump wiggle
+        if (this.hp <= 0) {
+          this.dead = true;
+          this.remove();
+          return;
+        }
+      }
+    }
+
     this.stT -= dt;
     this.aCD = Math.max(0, this.aCD - dt);
     const c = this.cfg;
@@ -848,15 +1058,25 @@ export class DN {
   stars: THREE.Points;
   hemi: THREE.HemisphereLight;
   dir: THREE.DirectionalLight;
+  isTreasure: boolean;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, isTreasure = false) {
     this.scene = scene;
+    this.isTreasure = isTreasure;
     this.t = 0.35;
     this.spd = 0.00015;
-    this.cN = new THREE.Color(0x040a18);
-    this.cD = new THREE.Color(0xff6b35);
-    this.cDy = new THREE.Color(0x87ceeb);
-    this.cDk = new THREE.Color(0xff4500);
+    
+    if (isTreasure) {
+      this.cN = new THREE.Color(0x1a0500); // Dark red sky
+      this.cD = new THREE.Color(0xff2200); // Fiery orange-red
+      this.cDy = new THREE.Color(0x400e00); // Ash-grey day with red tint
+      this.cDk = new THREE.Color(0xff4400); // Crimson dusk
+    } else {
+      this.cN = new THREE.Color(0x040a18);
+      this.cD = new THREE.Color(0xff6b35);
+      this.cDy = new THREE.Color(0x87ceeb);
+      this.cDk = new THREE.Color(0xff4500);
+    }
 
     const sg = new THREE.SphereGeometry(7, 12, 12);
     this.sun = new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: 0xfffcdd }));
@@ -1027,6 +1247,22 @@ export class SimpleSynthesizer {
     gain.connect(this.ctx.destination);
     osc.start();
     osc.stop(this.ctx.currentTime + 0.12);
+  }
+
+  playCollect(): void {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.18);
   }
 }
 

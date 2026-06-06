@@ -810,14 +810,14 @@ export default function LandingPage({ onEnterGame }: LandingPageProps) {
         </div>
       </div>
 
-      {/* 6. GAME MODES (3 CON DUONG) */}
+      {/* 6. GAME MODES (4 CON DUONG) */}
       <section className="modes-section max-w-[1200px] mx-auto px-6 md:px-10 pb-16 md:pb-24 z-10 relative" id="modes">
         <p className="section-tag font-mono text-[10px] tracking-[4px] uppercase text-[#3dffa0] mb-4">// Chế Độ Chơi</p>
         <h2 className="section-title text-3xl md:text-5xl lg:text-6xl leading-[1.05] tracking-[4px] text-white font-bold mb-12 uppercase" style={{ fontFamily: 'var(--display)' }}>
-          3 CON<br />ĐƯỜNG
+          4 CON<br />ĐƯỜNG
         </h2>
 
-        <div className="modes-grid grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="modes-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Mode 1 */}
           <div className="mode-card creative p-6 md:p-8 border border-white/5 rounded-md relative overflow-hidden transition-all duration-300 hover:border-white/10 bg-[#090d1a]/50">
             <p className="mode-num font-mono text-[10px] tracking-[3px] text-[#5a6680] mb-4">01 //</p>
@@ -839,12 +839,12 @@ export default function LandingPage({ onEnterGame }: LandingPageProps) {
             <p className="mode-num font-mono text-[10px] tracking-[3px] text-[#5a6680] mb-4">02 //</p>
             <h3 className="mode-name text-3xl md:text-4xl text-[#ff6b3d] tracking-[3px] mb-3 uppercase" style={{ fontFamily: 'var(--display)' }}>SURVIVAL</h3>
             <p className="mode-desc text-xs md:text-sm text-[#5a6680] leading-[1.7] mb-5">
-              Sống sót qua từng đêm. Quản lý HP, độ đói, chiến đấu với mob. Ban đêm quái vật tăng sinh — hãy cẩn thận.
+              Sống sót qua từng đêm. Quản lý HP, độ đói, chiến đấu với mob. Ban đêm quái vật tăng sinh vô lượng — hãy cẩn thận.
             </p>
             <ul className="mode-features flex flex-col gap-2 font-mono text-[11px] text-[#d4ddf5]">
               <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> HP & hunger system</li>
               <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Mob AI tấn công</li>
-              <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Night spawn waves</li>
+              <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Infinite night spawner</li>
               <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Leveling & XP</li>
             </ul>
             <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#ff6b3d] to-[#ff3d6b]" />
@@ -864,6 +864,22 @@ export default function LandingPage({ onEnterGame }: LandingPageProps) {
               <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Multiple biomes</li>
             </ul>
             <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#5ba8ff] to-[#a855f7]" />
+          </div>
+
+          {/* Mode 4 */}
+          <div className="mode-card treasure p-6 md:p-8 border border-white/5 rounded-md relative overflow-hidden transition-all duration-300 hover:border-white/10 bg-[#090d1a]/50">
+            <p className="mode-num font-mono text-[10px] tracking-[3px] text-[#5a6680] mb-4">04 //</p>
+            <h3 className="mode-name text-3xl md:text-4xl text-[#eab308] tracking-[3px] mb-3 uppercase" style={{ fontFamily: 'var(--display)' }}>TREASURE</h3>
+            <p className="mode-desc text-xs md:text-sm text-[#5a6680] leading-[1.7] mb-5">
+              Bước vào vùng đất dung nham đỏ rực chứa đầy rương kho báu và khối Chìa khóa vàng, dưới sự truy lùng của vô hạn zombie!
+            </p>
+            <ul className="mode-features flex flex-col gap-2 font-mono text-[11px] text-[#d4ddf5]">
+              <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Hot lava oceans</li>
+              <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Unlimited zombies</li>
+              <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Key & Chest hunt</li>
+              <li className="flex items-center gap-2.5 text-[#d4ddf5]"><span className="text-[#5a6680]">→</span> Intense survival</li>
+            </ul>
+            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#eab308] to-[#ef4444]" />
           </div>
         </div>
       </section>

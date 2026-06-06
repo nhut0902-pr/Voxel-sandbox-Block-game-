@@ -25,7 +25,7 @@ import { socketService } from '../systems/socketService';
 interface GameOptions {
   name: string;
   seed: string;
-  mode: 'creative' | 'survival' | 'adventure';
+  mode: 'creative' | 'survival' | 'adventure' | 'treasure';
   biome: string;
   botCount: string;
   room: string;
@@ -208,6 +208,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [shopActive, setShopActive] = useState(false);
   const [isDead, setIsDead] = useState(false);
   const [deadMsg, setDeadMsg] = useState('');
+  const [isVictory, setIsVictory] = useState(false);
+  const [victoryMsg, setVictoryMsg] = useState('');
+  const [oxygen, setOxygen] = useState(100);
+  const [equippedArmorList, setEquippedArmorList] = useState<string[]>([]);
+  const [showTreasureGuide, setShowTreasureGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   /* ─── Fullscreen toggle utility ─── */
@@ -288,6 +293,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // Instance engines
+  const prevWasNight = useRef<boolean>(false);
+  const nightsSurvivedRef = useRef<number>(1);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const camRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -438,13 +445,16 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     renderer.setSize(window.innerWidth, window.innerHeight);
     rendererRef.current = renderer;
 
-    scene.fog = new THREE.Fog(0x87ceeb, 30, Dev.rd() * CW * 0.95);
+    const isTreasure = optsRef.current.mode === 'treasure';
+    const activeBiome = isTreasure ? 'treasure_lava' : opts.biome;
+    const initialFogColor = isTreasure ? 0x1a0500 : 0x87ceeb;
+    scene.fog = new THREE.Fog(initialFogColor, 30, Dev.rd() * CW * 0.95);
 
     // 2. Instantiate procedural engine components
-    const dn = new DN(scene);
+    const dn = new DN(scene, isTreasure);
     dnRef.current = dn;
 
-    const wgen = new WGen(opts.seed, opts.biome);
+    const wgen = new WGen(opts.seed, activeBiome);
     const cmgr = new CM(scene, wgen);
     chunkMgrRef.current = cmgr;
 
@@ -456,13 +466,15 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     playerRef.current = player;
 
     // Load saves if available, restricting position to matching seed/biome
+    let hasLoadedSave = false;
     try {
       const saved = localStorage.getItem('vv5_react');
       if (saved) {
         const d = JSON.parse(saved);
-        if (d.seed === optsRef.current.seed && d.biome === optsRef.current.biome) {
+        if (d.seed === optsRef.current.seed && (d.biome === optsRef.current.biome || optsRef.current.mode === 'treasure')) {
           if (d.pos) player.pos.set(d.pos[0], d.pos[1], d.pos[2]);
           if (d.yaw != null) player.yaw = d.yaw;
+          hasLoadedSave = true;
         } else {
           // Reset starting position to safe biome height as seed or biome has changed
           const safeH = wgen.h(8, 8);
@@ -486,6 +498,17 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         }
       }
     } catch (err) { }
+
+    if (!hasLoadedSave && optsRef.current.mode === 'treasure') {
+      setBagItems({
+        sw2: 1,
+        pick: 1,
+        bread: 8,
+        key: 1,
+      });
+      player.wpn = ITM['sw2'];
+      setEquippedWpn(ITM['sw2']);
+    }
 
     setGoldCount(player.gold);
     setHp(player.hp);
@@ -952,20 +975,97 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               socketService.emit('block:change', { x: hoverBlock.x, y: hoverBlock.y, z: hoverBlock.z, blockId: 0 });
               
               const bId = hoverBlock.block;
-              if (bId > 0) {
-                addBagItem(String(bId), 1);
-              }
-
-              if (hoverBlock.block === 14) {
-                pInst.gold += 3;
+              if (bId === 18) {
+                // Treasure Chest 🎁
+                const isTreasureMode = optsRef.current.mode === 'treasure';
+                let opened = false;
+                
+                setBagItems(prev => {
+                  const ownedKeys = prev['key'] || 0;
+                  
+                  if (isTreasureMode) {
+                    if (ownedKeys >= 3) {
+                      opened = true;
+                      const next = { ...prev };
+                      next['key'] = Math.max(0, ownedKeys - 3);
+                      
+                      setTimeout(() => {
+                        setIsVictory(true);
+                        setVictoryMsg('🏆 CHÚC MỪNG CHIẾN THẮNG! Bạn đã kiên cường vượt qua hàng loạt thử thách vô song, định vị chính xác và khai mở đại vương rương cổ báu thành công!');
+                        synth.playCollect();
+                      }, 50);
+                      return next;
+                    }
+                  } else {
+                    if (ownedKeys > 0) {
+                      opened = true;
+                      const next = { ...prev };
+                      next['key'] = Math.max(0, ownedKeys - 1);
+                      
+                      const choices = [
+                        { id: 'pot_hp', n: 'Thuốc HP 🧪', count: 3 },
+                        { id: 'pot_spd', n: 'Thuốc Tốc ⚗️', count: 2 },
+                        { id: 'pistol', n: 'Súng Lục 🔫', count: 1 },
+                        { id: 'rifle', n: 'Súng Trường ︻╦╤─', count: 1 },
+                        { id: 'wings', n: 'Cánh Thần 🪽', count: 1 },
+                        { id: 'meat', n: 'Thịt Nướng 🍖', count: 5 },
+                      ];
+                      const chosen = choices[~~(Math.random() * choices.length)];
+                      next[chosen.id] = (next[chosen.id] || 0) + chosen.count;
+                      
+                      setTimeout(() => {
+                        pInst.gold += 120;
+                        setGoldCount(pInst.gold);
+                        triggerToast(`🎁 MỞ RƯƠNG THÀNH CÔNG! Nhận ${chosen.count}x ${chosen.n} & 120🪙!`);
+                      }, 50);
+                      
+                      return next;
+                    }
+                  }
+                  return prev;
+                });
+                
+                setTimeout(() => {
+                  if (!opened) {
+                    if (isTreasureMode) {
+                      triggerToast('🔒 BẤT THÀNH! Cổ Rương Báu rực sáng rào phong ấn, bạn cần trọn vẹn 3 Chìa Khóa Vàng (🔑) tại 3 đền thờ viễn phương mới mở khóa được!');
+                    } else {
+                      triggerToast('🔒 Cần 1 Chìa Khóa Vàng (🔑) để mở rương! Thu thập tại các khối chìa khóa vàng trên mặt đất!');
+                    }
+                    cInst.wSet(hoverBlock.x, hoverBlock.y, hoverBlock.z, 18);
+                    cInst.upd(pInst.pos.x, pInst.pos.z, Dev.rd());
+                  }
+                }, 80);
+              } else if (bId === 19) {
+                // Gold Key Block
+                setBagItems(prev => {
+                  const next = { ...prev };
+                  next['key'] = (next['key'] || 0) + 1;
+                  return next;
+                });
+                triggerToast('🔑 THU THẬP ĐƯỢC 1 CHÌA KHÓA VÀNG!');
+                pInst.gold += 15;
                 setGoldCount(pInst.gold);
-                triggerToast('⛏️ Vàng! +3🪙 (Khối quặng đã được thu thập)');
-              } else if (hoverBlock.block === 15) {
-                pInst.gold += 8;
-                setGoldCount(pInst.gold);
-                triggerToast('💎 Kim cương! +8🪙 (Khối kim cương đã được thu thập)');
               } else {
-                triggerToast('Phá: ' + (BLK[hoverBlock.block]?.n || 'khối') + ' (+1 trong túi đồ)');
+                if (bId > 0) {
+                  setBagItems(prev => {
+                    const next = { ...prev };
+                    next[String(bId)] = (next[String(bId)] || 0) + 1;
+                    return next;
+                  });
+                }
+                
+                if (bId === 14) {
+                  pInst.gold += 3;
+                  setGoldCount(pInst.gold);
+                  triggerToast('⛏️ Vàng! +3🪙 (Khối quặng đã được thu thập)');
+                } else if (bId === 15) {
+                  pInst.gold += 8;
+                  setGoldCount(pInst.gold);
+                  triggerToast('💎 Kim cương! +8🪙 (Khối kim cương đã được thu thập)');
+                } else {
+                  triggerToast('Phá: ' + (BLK[bId]?.n || 'khối') + ' (+1 trong túi đồ)');
+                }
               }
             }
           }
@@ -996,20 +1096,68 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         dInst.upd(dt);
         setTimeLabel(dInst.lbl());
         setTimePercent(dInst.t * 100);
-        setIsNight(dInst.night());
+        
+        const currentNightStatus = dInst.night();
+        setIsNight(currentNightStatus);
 
-        // Spawn extra bad mobs at night
-        if (dInst.night() && optsRef.current.mode !== 'creative') {
+        if (prevWasNight.current !== currentNightStatus) {
+          prevWasNight.current = currentNightStatus;
+          if (currentNightStatus) {
+            nightsSurvivedRef.current += 1;
+            triggerToast(`🌙 Đêm thứ ${nightsSurvivedRef.current} đã xuống! Quái vật xuất hiện dồn dập, độ khó tăng tiến!`);
+          } else {
+            triggerToast('☀️ Bình minh đã lên! Quái vật bùng cháy dưới ánh mặt trời.');
+          }
+        }
+
+        // Spawn extra bad mobs at night (or continuous waves in Treasure hunt mode)
+        const isTreasureMode = optsRef.current.mode === 'treasure';
+        if ((currentNightStatus || isTreasureMode) && optsRef.current.mode !== 'creative') {
           nightSpawnAccumulator.current += dt;
-          if (nightSpawnAccumulator.current > 35) {
+          
+          const wave = nightsSurvivedRef.current || 1;
+          const isLavaLandMultiplier = isTreasureMode ? 1.5 : 1.0;
+          const spawnInterval = Math.max(3.0, (18 - wave * 1.5) / isLavaLandMultiplier);
+          
+          if (nightSpawnAccumulator.current > spawnInterval) {
             nightSpawnAccumulator.current = 0;
-            const nightHostiles = ['zombie', 'skeleton', 'creeper', 'wolf'];
-            const chosenType = nightHostiles[~~(Math.random() * nightHostiles.length)];
-            const a = Math.random() * Math.PI * 2;
-            const r = 22 + Math.random() * 12;
-            const x = pInst.pos.x + Math.cos(a) * r;
-            const z = pInst.pos.z + Math.sin(a) * r;
-            entsRef.current.push(new Entity(chosenType, x, wgen.h(~~x, ~~z) + 2, z, scene));
+            
+            // Spawn count can scale with nights survived
+            const spawnBatchCount = Math.min(4, Math.ceil(wave / 2));
+            const hostilesList = ['zombie', 'skeleton', 'creeper', 'wolf'];
+            
+            for (let b = 0; b < spawnBatchCount; b++) {
+              const chosenType = hostilesList[~~(Math.random() * hostilesList.length)];
+              
+              // 15% chance to surprise spawn right near the player
+              const isSurprise = Math.random() < 0.15;
+              const a = Math.random() * Math.PI * 2;
+              const r = isSurprise ? (6 + Math.random() * 4) : (18 + Math.random() * 12);
+              
+              const x = pInst.pos.x + Math.cos(a) * r;
+              const z = pInst.pos.z + Math.sin(a) * r;
+              
+              const newMob = new Entity(chosenType, x, wgen.h(~~x, ~~z) + 2, z, scene);
+              
+              // Infinite progressive scaling of HP, Speed & gold reward stats
+              if (wave > 1) {
+                const diffFactor = 1.0 + (wave - 1) * 0.20; // +20% HP & damage multiplier per night survived
+                newMob.hp = newMob.cfg.hp * diffFactor;
+                newMob.cfg = {
+                  ...newMob.cfg,
+                  spd: newMob.cfg.spd * Math.min(1.8, 1.0 + (wave - 1) * 0.05),
+                  gold: Math.ceil(newMob.cfg.gold * diffFactor),
+                  xp: Math.ceil(newMob.cfg.xp * diffFactor),
+                };
+              }
+              
+              entsRef.current.push(newMob);
+              
+              if (isSurprise && b === 0) {
+                triggerToast('⚠️ BẤT NGỜ: Quái vật đột kích vừa áp sát ngay sau lưng bạn!');
+                synth.playHit();
+              }
+            }
           }
         } else {
           nightSpawnAccumulator.current = 0;
@@ -1022,6 +1170,35 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             entsRef.current.splice(i, 1);
             continue;
           }
+
+          if (mob.type === 'key_collectible') {
+            // Spin key, wave vertically, check player proximity
+            if (mob.mesh) {
+              mob.mesh.rotation.y += dt * 2.5;
+              if ((mob as any)._ph === undefined) (mob as any)._ph = Math.random() * 10;
+              (mob as any)._ph += dt * 3.5;
+              mob.mesh.position.y = mob.pos.y + Math.sin((mob as any)._ph) * 0.15;
+            }
+
+            const dp = mob.pos.distanceTo(pInst.pos);
+            if (dp < 1.8) {
+              mob.dead = true;
+              mob.remove();
+              entsRef.current.splice(i, 1);
+
+              setBagItems(prev => {
+                const updated = { ...prev };
+                updated['key'] = (updated['key'] || 0) + 1;
+                return updated;
+              });
+              pInst.gold += 150;
+              setGoldCount(pInst.gold);
+              triggerToast('🔑 THU THẬP THÀNH CÔNG CHÌA KHÓA VÀNG HUYỀN THOẠI! (+150🪙)');
+              synth.playCollect();
+            }
+            continue; // Bypass standard monster chasing mechanics
+          }
+
           mob.upd(dt, pInst, cInst, (dmg, src) => {
             pInst.dmg(dmg, src, (dieSrc) => {
               setIsDead(true);
@@ -1038,7 +1215,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             });
             setHp(pInst.hp);
             synth.playBreak();
-          });
+          }, currentNightStatus);
         }
 
         // Keep local indices loaded
@@ -1048,6 +1225,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         setHp(pInst.hp);
         setHunger(pInst.hunger);
         setXpPercent((pInst.xp / (pInst.lv * 100)) * 100);
+        setOxygen(pInst.oxygen);
+        setEquippedArmorList(pInst.equippedArmor || []);
 
         // Update FPS HUD diagnostic label
         fpsAcc.current += dt;
@@ -1462,12 +1641,21 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   value={opts.biome}
                   onChange={(e) => setOpts({ ...opts, biome: e.target.value })}
                 >
-                  <option value="plains">🌾 Plains (Đồng cỏ)</option>
-                  <option value="forest">🌲 Forest (Trùng lâu)</option>
-                  <option value="desert">🏜️ Desert (Sa mạc)</option>
-                  <option value="snow">❄️ Snow (Băng thổ)</option>
-                  <option value="cherry">🌸 Cherry (Anh đào)</option>
-                  <option value="volcano">🌋 Volcano (Núi lửa)</option>
+                  {opts.mode === 'treasure' ? (
+                    <>
+                      <option value="treasure_lava">🔥 Vực Thẳm Dung Nham (Săn rương sâu thẳm)</option>
+                      <option value="treasure_ocean">🌊 Đại Dương Sâu Lạnh (Lặn biển đáy sâu)</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="plains">🌾 Plains (Đồng cỏ)</option>
+                      <option value="forest">🌲 Forest (Trùng lâu)</option>
+                      <option value="desert">🏜️ Desert (Sa mạc)</option>
+                      <option value="snow">❄️ Snow (Băng thổ)</option>
+                      <option value="cherry">🌸 Cherry (Anh đào)</option>
+                      <option value="volcano">🌋 Volcano (Núi lửa)</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>
@@ -1671,6 +1859,24 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   <span className="i">🗺️</span>
                   <div className="n">Adventure</div>
                   <div className="d">Khám phá dã ngoại</div>
+                </button>
+                <button
+                  type="button"
+                  className={`mc2 ${opts.mode === 'treasure' ? 's' : ''}`}
+                  onClick={() => {
+                    setOpts(prev => ({ 
+                      ...prev, 
+                      mode: 'treasure',
+                      biome: (prev.biome === 'treasure_lava' || prev.biome === 'treasure_ocean') ? prev.biome : 'treasure_lava'
+                    }));
+                    if (playerRef.current) playerRef.current.fly = false;
+                    setCurrentBadge('👑 TREASURE');
+                    setShowTreasureGuide(true);
+                  }}
+                >
+                  <span className="i">🔑</span>
+                  <div className="n">Truy Tìm Kho Báu</div>
+                  <div className="d">Săn rương báu & Lửa</div>
                 </button>
               </div>
             </div>
@@ -1935,6 +2141,27 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               <div style={{ width: `${xpPercent}%` }} />
               <span>⭐ Lv.{playerLevel}</span>
             </div>
+            {/* Oxygen Diving Bar */}
+            {oxygen < 100 && (
+              <div className="bar oxy select-none" style={{ background: 'rgba(14, 165, 233, 0.25)', borderColor: '#0ea5e9' }}>
+                <div style={{ width: `${oxygen}%`, background: '#0ea5e9', height: '100%' }} />
+                <span>🤿 Oxy: {Math.ceil(oxygen)}%</span>
+              </div>
+            )}
+            {/* Active Armor Badges */}
+            {equippedArmorList && equippedArmorList.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1 max-w-[140px]" style={{ pointerEvents: 'none' }}>
+                {equippedArmorList.map(aid => {
+                  const it = ITM[aid];
+                  if (!it) return null;
+                  return (
+                    <span key={aid} className="px-1 py-0.5 bg-slate-950/90 border border-green-500 text-green-400 font-bold rounded text-[7px] uppercase tracking-wide">
+                      {it.e} {it.n}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Dynamic hotbar elements */}
@@ -2471,6 +2698,120 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           🔄 Hồi Sinh Ngay
         </button>
       </div>
+
+      {/* ─── 6b. VICTORY CELEBRATION SCREEN ─── */}
+      {isVictory && (
+        <div id="victory-screen" className="absolute inset-0 z-[60] bg-black/90 flex flex-col items-center justify-center p-6 text-center select-none animate-fade-in">
+          <div className="max-w-md w-full bg-slate-900/95 border-2 border-yellow-500 rounded-3xl p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500 animate-pulse" />
+            
+            <div className="text-6xl mb-4 animate-bounce">🏆</div>
+            <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 uppercase tracking-widest leading-none drop-shadow mb-3 pb-1">
+              Chiến Thắng!
+            </h2>
+            
+            <p className="text-slate-200 font-medium text-sm leading-relaxed mb-6">
+              {victoryMsg}
+            </p>
+            
+            <div className="bg-slate-950/80 rounded-2xl border border-slate-800 p-4 mb-6 text-left space-y-1.5 font-mono">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Chế độ chơi:</span>
+                <span className="text-yellow-400 font-bold uppercase">Truy Tìm Kho Báu</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Bản đồ thử thách:</span>
+                <span className="text-emerald-400 font-bold">
+                  {opts.biome === 'treasure_lava' ? '🔥 Vực Thẳm Dung Nham' : '🌊 Đại Dương Sâu Lạnh'}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Vàng tích lũy:</span>
+                <span className="text-amber-400 font-bold">🪙 {goldCount} vàng</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setIsPlaying(false);
+                setIsVictory(false);
+                setVictoryMsg('');
+                document.exitPointerLock?.();
+              }}
+              className="w-full bg-gradient-to-r from-yellow-500 to-amber-500 text-slate-950 hover:from-yellow-400 hover:to-amber-400 active:scale-95 font-black text-sm tracking-widest uppercase py-3.5 px-6 rounded-2xl shadow-lg transition-transform duration-100 cursor-pointer text-center select-none"
+            >
+              🎉 TRỞ VỀ MENU CHÍNH 🎉
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TREASURE HUNT MODE FULL-SCREEN DETAILED GUIDE ─── */}
+      {showTreasureGuide && (
+        <div className="absolute inset-0 z-[70] bg-black/95 flex items-center justify-center p-4 overflow-y-auto select-none animate-fade-in text-slate-200">
+          <div className="max-w-xl w-full bg-slate-900 border-2 border-amber-500 rounded-3xl p-6 md:p-8 shadow-2xl relative">
+            <div className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer text-xl font-bold font-mono" onClick={() => setShowTreasureGuide(false)}>✕</div>
+            
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-5">
+              <span className="text-4xl">👑</span>
+              <div>
+                <h3 className="text-xl font-black text-amber-400 uppercase tracking-wider leading-none">Cẩm Nang Truy Tìm Kho Báu</h3>
+                <p className="text-[10px] text-slate-400 font-medium mt-1 leading-none">Chiến dịch sinh tồn đoạt rương Thủy Tổ · Vô Hạn Zombie</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs md:text-sm leading-relaxed antialiased">
+              <p>
+                Chào mừng Chiến Binh dũng cảm! Bạn đang dấn thân vào chế độ <span className="text-amber-300 font-bold">Truy Tìm Kho Báu</span> kỳ vĩ. Bản đồ cực kỳ rộng lớn, đầy ắp hiểm nguy rình rập và tầng tầng lớp lớp thử thách nguy nan:
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
+                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 3 Chìa Khóa Vàng</h4>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    Nằm lơ lửng tại các điện thờ cột mốc ở tọa độ xa: <span className="text-yellow-400 font-bold font-mono">[15, 85]</span>, <span className="text-yellow-400 font-bold font-mono">[85, 15]</span>, và <span className="text-yellow-400 font-bold font-mono">[95, 95]</span>. Bạn phải vượt địa hình dốc đứng để thu thập chúng!
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
+                  <h4 className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🎁 Rương Thủy Tổ</h4>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    Quây hãm sâu trong mật điện hoàng kim tế đàn tại <span className="text-red-400 font-bold font-mono">X: 115, Z: 115</span>. Thu thập đủ <span className="text-amber-300 font-bold">3 chìa khóa vàng</span> để hóa giải phong ấn tế đàn rương báu để đoạt CHIẾN THẮNG!
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800">
+                <h4 className="font-black text-sky-400 text-xs mb-1.5 uppercase tracking-wide flex items-center gap-1">🛠️ Đồ Chuyên Dụng Bắt Buộc (Mở Shop - G):</h4>
+                <ul className="space-y-1.5 text-[11px] text-slate-300">
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-red-400">🧑‍🚒</span>
+                    <span><strong className="text-amber-300">Giáp Chống Lửa (160🪙):</strong> Kháng sát thương thiêu đốt khi bơi/lặn hoặc đứng trên dung nham tại bản đồ <strong className="text-red-400">Vực Thẳm Dung Nham 🔥</strong>.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-sky-400">🤿</span>
+                    <span><strong className="text-sky-400">Mũ Lặn Ô-xy (120🪙):</strong> Ngăn chặn trạng thái cạn kiệt dưỡng khí tước đoạt sinh mệnh khi bơi sâu dưới lòng bản đồ <strong className="text-sky-400">Đại Dương Sâu Lạnh 🌊</strong>.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl text-[11px] text-amber-300 leading-normal">
+                ⚠️ <strong className="font-bold">ZOMBIE ĐỘT KÍCH VÔ HẠN:</strong> Đêm xuống, lũ thây ma hung hãn sẽ trồi lên dập dồn tấn công bủa vây áp sát lưng bạn. Hãy săn quái hoặc đào quặng bán lấy vàng, vào <strong className="text-white">Cửa hàng (Phím G)</strong> nâng cấp vũ khí trang bị thích ứng sinh tồn!
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                synth.playPlace();
+                setShowTreasureGuide(false);
+              }}
+              className="w-full mt-6 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 hover:from-amber-400 hover:to-yellow-400 active:scale-95 font-black text-sm tracking-widest uppercase py-3.5 px-6 rounded-2xl shadow-xl transition-all cursor-pointer text-center select-none"
+            >
+              🚀 BẮT ĐẦU CHẠY CHIẾN DỊCH 🚀
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── SETTINGS (PAUSE) MENU ─── */}
       <button 
