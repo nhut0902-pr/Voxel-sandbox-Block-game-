@@ -150,7 +150,11 @@ const CRAFTING_RECIPES: CraftingRecipe[] = [
   }
 ];
 
-export default function VoxelGame() {
+interface VoxelGameProps {
+  onBackToLanding?: () => void;
+}
+
+export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   /* ─── UI Router states ─── */
   const [isPlaying, setIsPlaying] = useState(false);
   const [opts, setOpts] = useState<GameOptions>({
@@ -1671,7 +1675,20 @@ export default function VoxelGame() {
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4">
+            {onBackToLanding && (
+              <button
+                type="button"
+                className="w-full mt-4 py-2.5 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-black transition-all active:scale-95 text-center flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                onClick={() => {
+                  synth.playPlace();
+                  onBackToLanding();
+                }}
+              >
+                🏠 Trở về Trang Chủ Wiki
+              </button>
+            )}
+
+            <div className="flex gap-2 mt-3">
               <button
                 type="button"
                 className="btn sec font-bold active:scale-95 m-0"
@@ -2081,7 +2098,8 @@ export default function VoxelGame() {
               <div className="ig">
                 {Object.entries(bagItems).filter(([id, count]) => {
                   const it = ITM[id];
-                  if (!it || count <= 0) return false;
+                  const cCount = Number(count) || 0;
+                  if (!it || cCount <= 0) return false;
                   if (activeTab === 'items' && it.t !== 'food' && it.t !== 'potion') return true;
                   if (activeTab === 'food' && (it.t === 'food' || it.t === 'potion')) return true;
                   return false;
