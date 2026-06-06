@@ -20,6 +20,7 @@ import {
   sh
 } from '../systems/voxelCore';
 import { socketService } from '../systems/socketService';
+import { audioSystem } from '../systems/audioSystem';
 
 /* ─── Types & Interfaces ─── */
 interface GameOptions {
@@ -220,6 +221,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [showSOSModal, setShowSOSModal] = useState(false);
   const [invincibleSeconds, setInvincibleSeconds] = useState(0);
   const [teammates, setTeammates] = useState<{ id: string; name: string; dist: number; screenX?: number; screenY?: number; onScreen: boolean; angle: number }[]>([]);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -2176,15 +2178,37 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             <div className="flex gap-2 mt-3">
               <button
                 type="button"
-                className="btn sec font-bold active:scale-95 m-0"
+                className={`btn sec font-bold active:scale-95 m-0 transition-colors ${
+                  isAudioMuted 
+                    ? 'bg-rose-950/40 hover:bg-rose-900/40 border-rose-800 text-rose-300' 
+                    : 'hover:bg-slate-800'
+                }`}
+                style={{ flex: 1, marginTop: 0 }}
+                onClick={() => {
+                  const newMuted = !isAudioMuted;
+                  audioSystem.setMuted(newMuted);
+                  synth.setMuted(newMuted);
+                  setIsAudioMuted(newMuted);
+                  if (!newMuted) {
+                    synth.playPlace();
+                  }
+                }}
+              >
+                {isAudioMuted ? '🔇 TẮT ÂM SFX' : '🔊 BẬT ÂM SFX'}
+              </button>
+              <button
+                type="button"
+                className="btn sec font-bold active:scale-95 m-0 hover:bg-slate-800"
                 style={{ flex: 1, marginTop: 0 }}
                 onClick={toggleFullscreen}
               >
                 🖥️ TOÀN MÀN HÌNH
               </button>
+            </div>
+
+            <div className="mt-2 text-center">
               <button
-                className="btn font-black text-slate-900 leading-none shadow-emerald-400/20 active:scale-95 m-0"
-                style={{ flex: 2, marginTop: 0 }}
+                className="btn font-black text-slate-900 leading-none shadow-emerald-400/20 active:scale-95 m-0 w-full"
                 onClick={() => {
                   synth.init();
                   setIsPlaying(true);
@@ -2445,16 +2469,24 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 </div>
               );
             } else {
-              // Off-screen indicator positioned circularly around the viewport edges (ept)
-              const screenRadius = 38; // clamp distance inside the viewport boundaries
-              const cx = 50 + Math.sin(peer.angle) * screenRadius;
-              const cy = 50 - Math.cos(peer.angle) * screenRadius;
+              // Rectangular clamp to the screen edges so indicators sit perfectly at the margins
+              const dx = Math.sin(peer.angle);
+              const dy = -Math.cos(peer.angle);
+              const rx = 44; // Max horizontal screen reach from center (offsets to 6% and 94%)
+              const ry = 42; // Max vertical screen reach from center (offsets to 8% and 92%)
+              
+              const kX = Math.abs(dx) > 0.0001 ? rx / Math.abs(dx) : Infinity;
+              const kY = Math.abs(dy) > 0.0001 ? ry / Math.abs(dy) : Infinity;
+              const scaleK = Math.min(kX, kY);
+              
+              const cx = 50 + dx * scaleK;
+              const cy = 50 + dy * scaleK;
               const rotDeg = Math.round(peer.angle * (180 / Math.PI));
-
+              
               return (
                 <div
                   key={peer.id}
-                  className="absolute pointer-events-none z-30 select-none -translate-x-1/2 -translate-y-1/2 bg-slate-950/95 border border-emerald-400/80 p-1.5 px-2 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.2)] flex items-center gap-1.5 backdrop-blur"
+                  className="absolute pointer-events-none z-30 select-none -translate-x-1/2 -translate-y-1/2 bg-slate-950/90 border border-emerald-400/80 p-1.5 px-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.25)] flex items-center gap-1.5 backdrop-blur-md transition-all duration-300"
                   style={{ left: `${cx}%`, top: `${cy}%` }}
                 >
                   <span
@@ -2463,8 +2495,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   >
                     ▲
                   </span>
-                  <span className="text-[9px] font-bold text-emerald-300 tracking-wider font-sans leading-none uppercase">
-                    {peer.name.substring(0, 6)}: {peer.dist}m
+                  <span className="text-[10px] font-extrabold text-emerald-300 tracking-wider font-sans leading-none">
+                    {peer.name.substring(0, 10)}: {peer.dist}m
                   </span>
                 </div>
               );

@@ -6,6 +6,20 @@
 
 class AudioSystem {
   private ctx: AudioContext | null = null;
+  private isMuted: boolean = false;
+
+  public setMuted(muted: boolean): void {
+    this.isMuted = muted;
+  }
+
+  public getMuted(): boolean {
+    return this.isMuted;
+  }
+
+  public toggleMute(): boolean {
+    this.isMuted = !this.isMuted;
+    return this.isMuted;
+  }
 
   private initContext(): AudioContext {
     if (!this.ctx) {
@@ -18,6 +32,7 @@ class AudioSystem {
   }
 
   public playFootstep(): void {
+    if (this.isMuted) return;
     const ctx = this.initContext();
     const now = ctx.currentTime;
 
@@ -51,6 +66,7 @@ class AudioSystem {
   }
 
   public playBreakBlock(): void {
+    if (this.isMuted) return;
     const ctx = this.initContext();
     const now = ctx.currentTime;
 
@@ -97,6 +113,7 @@ class AudioSystem {
   }
 
   public playPlaceBlock(): void {
+    if (this.isMuted) return;
     const ctx = this.initContext();
     const now = ctx.currentTime;
 
@@ -117,6 +134,7 @@ class AudioSystem {
   }
 
   public playHitSwish(): void {
+    if (this.isMuted) return;
     const ctx = this.initContext();
     const now = ctx.currentTime;
 
@@ -142,6 +160,7 @@ class AudioSystem {
   }
 
   public playHitHurt(): void {
+    if (this.isMuted) return;
     const ctx = this.initContext();
     const now = ctx.currentTime;
 

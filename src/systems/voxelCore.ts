@@ -1321,8 +1321,14 @@ export function rc(world: CM, ori: THREE.Vector3, dir: THREE.Vector3, maxD = 6):
 /* ─── Web Audio SFX Synthesizer Class ─── */
 export class SimpleSynthesizer {
   ctx: AudioContext | null = null;
+  isMuted: boolean = false;
+
+  setMuted(muted: boolean): void {
+    this.isMuted = muted;
+  }
 
   init(): void {
+    if (this.isMuted) return;
     if (!this.ctx) {
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       if (AC) this.ctx = new AC();
@@ -1330,6 +1336,7 @@ export class SimpleSynthesizer {
   }
 
   playBreak(): void {
+    if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -1346,6 +1353,7 @@ export class SimpleSynthesizer {
   }
 
   playPlace(): void {
+    if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -1362,6 +1370,7 @@ export class SimpleSynthesizer {
   }
 
   playHit(): void {
+    if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -1378,6 +1387,7 @@ export class SimpleSynthesizer {
   }
 
   playCollect(): void {
+    if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -1394,6 +1404,7 @@ export class SimpleSynthesizer {
   }
 
   playRadarBeep(freq = 880): void {
+    if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
