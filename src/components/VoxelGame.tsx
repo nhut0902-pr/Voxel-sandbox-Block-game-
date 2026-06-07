@@ -1205,10 +1205,10 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         const isRadarMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
         if (isRadarMode && pInst) {
           const radarTargets = [
-            { name: 'Đền Thờ Phía Tây 🔑', x: 15, y: 36, z: 85, type: 'key' as const },
-            { name: 'Đền Thờ Phía Đông 🔑', x: 85, y: 36, z: 15, type: 'key' as const },
-            { name: 'Đền Thờ Trung Tâm 🔑', x: 95, y: 36, z: 95, type: 'key' as const },
-            { name: 'Phế Tích Cổ Tự Vương Rương Thủy Tổ 🎁', x: 115, y: 19, z: 115, type: 'chest' as const }
+            { name: 'Đền Thờ Phía Tây 🔑 (Trên Cao - Đỉnh Tháp Thần Y=36)', x: 15, y: 36, z: 85, type: 'key' as const },
+            { name: 'Đền Thờ Phía Đông 🔑 (Trên Cao - Đỉnh Tháp Thần Y=36)', x: 85, y: 36, z: 15, type: 'key' as const },
+            { name: 'Đền Thờ Trung Tâm 🔑 (Trên Cao - Đỉnh Tháp Thần Y=36)', x: 95, y: 36, z: 95, type: 'key' as const },
+            { name: 'Cung Điện Cổ Tự 🎁 (Rương Thủy Tổ ở Thờ Điện Trệt Y=19)', x: 115, y: 19, z: 115, type: 'chest' as const }
           ];
 
           let nearestWarn: { name: string; dist: number; type: 'key' | 'chest' } | null = null;
@@ -3191,16 +3191,18 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                 <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 3 Chìa Khóa Vàng</h4>
+                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 3 Chìa Khóa Vàng (Ở TRÊN CAO)</h4>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    Nằm lơ lửng tại các điện thờ cột mốc ở tọa độ xa: <span className="text-yellow-400 font-bold font-mono">[15, 85]</span>, <span className="text-yellow-400 font-bold font-mono">[85, 15]</span>, và <span className="text-yellow-400 font-bold font-mono">[95, 95]</span>. Bạn phải vượt địa hình dốc đứng để thu thập chúng!
+                    <strong className="text-amber-300">NẰM TRÊN CAO CHÓT VÓT:</strong> Cả 3 chìa khóa đều ở độ cao lơ lửng <span className="text-yellow-400 font-bold font-mono">Y: 36</span> trên đỉnh các tháp cổ tự hắc diện thạch, <span className="text-red-400 font-bold">KHÔNG nằm dưới lòng đất</span>. 
+                    <br /><span className="text-emerald-400 font-semibold">Tọa độ:</span> Tây <span className="text-yellow-400 font-bold font-mono">[15, 85]</span>, Đông <span className="text-yellow-400 font-bold font-mono">[85, 15]</span>, và Trung tâm <span className="text-yellow-400 font-bold font-mono">[95, 95]</span>. Hãy leo theo cầu thang gạch xoắn ốc quanh cột trụ để lượm!
                   </p>
                 </div>
 
                 <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                  <h4 className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🎁 Rương Thủy Tổ</h4>
+                  <h4 className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🎁 Rương Thủy Tổ (TẦNG TRỆT)</h4>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    Quây hãm sâu trong mật điện hoàng kim tế đàn tại <span className="text-red-400 font-bold font-mono">X: 115, Z: 115</span>. Thu thập đủ <span className="text-amber-300 font-bold">3 chìa khóa vàng</span> để hóa giải phong ấn tế đàn rương báu để đoạt CHIẾN THẮNG!
+                    <strong className="text-emerald-300">NẰM TRONG CUNG ĐIỆN KHỔNG LỒ:</strong> Ở tọa độ trung tâm <span className="text-red-400 font-bold font-mono">X: 115, Z: 115</span> trên bệ thờ vàng & kim cương cao quý (<span className="text-emerald-300 font-bold font-mono">Y: 19</span>).
+                    <br /><span className="text-amber-300 font-bold">Cảnh giác:</span> Mật thất cung điện được canh giữ kiên cố bởi <span className="text-red-400 font-bold">6 siêu Zombie Vệ Binh Hoàng Gia</span> cực trâu bò. Thu thập đủ 3 chìa khóa để giải phong ấn chiến thắng!
                   </p>
                 </div>
               </div>
