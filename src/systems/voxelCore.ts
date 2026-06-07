@@ -365,17 +365,17 @@ export class CM {
 
         // ─── Procedural Landmark Shrines & Palace ───
         // We generate these epic land architecture elements in ALL worlds so players have fantastic landmarks!
-        const distA1X = Math.abs(wx - 15), distA1Z = Math.abs(wz - 85);
-        const distA2X = Math.abs(wx - 85), distA2Z = Math.abs(wz - 15);
-        const distA3X = Math.abs(wx - 95), distA3Z = Math.abs(wz - 95);
+        const distA1X = Math.abs(wx - (-150)), distA1Z = Math.abs(wz - 150);
+        const distA2X = Math.abs(wx - 150), distA2Z = Math.abs(wz - (-150));
+        const distA3X = Math.abs(wx - (-200)), distA3Z = Math.abs(wz - (-200));
         
         let nearAltar = false;
         let ax = 0, az = 0;
         let distAX = 999, distAZ = 999;
         
-        if (distA1X <= 4 && distA1Z <= 4) { nearAltar = true; ax = 15; az = 85; distAX = distA1X; distAZ = distA1Z; }
-        else if (distA2X <= 4 && distA2Z <= 4) { nearAltar = true; ax = 85; az = 15; distAX = distA2X; distAZ = distA2Z; }
-        else if (distA3X <= 4 && distA3Z <= 4) { nearAltar = true; ax = 95; az = 95; distAX = distA3X; distAZ = distA3Z; }
+        if (distA1X <= 4 && distA1Z <= 4) { nearAltar = true; ax = -150; az = 150; distAX = distA1X; distAZ = distA1Z; }
+        else if (distA2X <= 4 && distA2Z <= 4) { nearAltar = true; ax = 150; az = -150; distAX = distA2X; distAZ = distA2Z; }
+        else if (distA3X <= 4 && distA3Z <= 4) { nearAltar = true; ax = -200; az = -200; distAX = distA3X; distAZ = distA3Z; }
 
         if (nearAltar) {
           // Clear natural dirt/rocks upwards
