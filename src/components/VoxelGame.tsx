@@ -755,7 +755,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       ents.push(new Entity(tp, x, wgen.h(~~x, ~~z) + 1, z, scene));
     }
 
-    if (optsRef.current.mode === 'treasure') {
+    const isCollectibleMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
+    if (isCollectibleMode) {
       const keysLocations = [
         { x: 15, y: 37, z: 85 },
         { x: 85, y: 37, z: 15 },
@@ -764,6 +765,25 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       keysLocations.forEach(loc => {
         ents.push(new Entity('key_collectible', loc.x, loc.y, loc.z, scene));
       });
+
+      // Spawn 6 tough Zombie Palace Guardians inside the massive Palace at (115, 115)
+      for (let k = 0; k < 6; k++) {
+        const theta = (k / 6) * Math.PI * 2;
+        const gX = 115 + Math.cos(theta) * 6;
+        const gZ = 115 + Math.sin(theta) * 6;
+        const guardian = new Entity('zombie', gX, 16, gZ, scene);
+        guardian.hp = 40; // Double health!
+        guardian.cfg = {
+          ...guardian.cfg,
+          hp: 40,
+          spd: 2.6, // slightly faster
+          dmg: 5,   // hits harder
+          gold: 25, // great reward!
+          xp: 30,
+          e: '🧟🛡️' // Royal guard badge!
+        };
+        ents.push(guardian);
+      }
     }
 
     entsRef.current = ents;
@@ -1181,13 +1201,14 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           }
         }
 
-        // Radar proximity warning alerts for Key Shrines / ancient chest (mode: treasure)
-        if (optsRef.current.mode === 'treasure' && pInst) {
+        // Radar proximity warning alerts for Key Shrines / ancient chest (mode: treasure, survival, adventure)
+        const isRadarMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
+        if (isRadarMode && pInst) {
           const radarTargets = [
-            { name: 'Đền Thờ Phía Tây 🔑', x: 15, y: 33, z: 85, type: 'key' as const },
-            { name: 'Đền Thờ Phía Đông 🔑', x: 85, y: 33, z: 15, type: 'key' as const },
-            { name: 'Đền Thờ Trung Tâm 🔑', x: 95, y: 33, z: 95, type: 'key' as const },
-            { name: 'Phế Tích Cổ Tự Vương Rương Thủy Tổ 🎁', x: 115, y: 12, z: 115, type: 'chest' as const }
+            { name: 'Đền Thờ Phía Tây 🔑', x: 15, y: 36, z: 85, type: 'key' as const },
+            { name: 'Đền Thờ Phía Đông 🔑', x: 85, y: 36, z: 15, type: 'key' as const },
+            { name: 'Đền Thờ Trung Tâm 🔑', x: 95, y: 36, z: 95, type: 'key' as const },
+            { name: 'Phế Tích Cổ Tự Vương Rương Thủy Tổ 🎁', x: 115, y: 19, z: 115, type: 'chest' as const }
           ];
 
           let nearestWarn: { name: string; dist: number; type: 'key' | 'chest' } | null = null;
@@ -1464,7 +1485,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             });
 
             // --- DRAW SPECIAL TREASURE MARKERS FOR MINI-MAP ---
-            if (optsRef.current.mode === 'treasure') {
+            const isMinimapTreasureMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
+            if (isMinimapTreasureMode) {
               // 1. Draw Keys (from active key_collectible entities list)
               entsRef.current.forEach(e => {
                 if (e.type === 'key_collectible' && !e.dead) {

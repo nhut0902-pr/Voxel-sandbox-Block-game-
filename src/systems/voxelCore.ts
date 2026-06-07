@@ -367,64 +367,184 @@ export class CM {
           }
         }
 
-        // ─── Procedural Landmark Shrines for Treasure Hunt mode ───
-        if (isTreasureBiome) {
-          // Landmark coordinates
-          const isAltar1 = (wx === 15 && wz === 85);
-          const isAltar2 = (wx === 85 && wz === 15);
-          const isAltar3 = (wx === 95 && wz === 95);
-          const isChestChamber = (wx === 115 && wz === 115);
+        // ─── Procedural Landmark Shrines & Palace ───
+        // We generate these epic land architecture elements in ALL worlds so players have fantastic landmarks!
+        const distA1X = Math.abs(wx - 15), distA1Z = Math.abs(wz - 85);
+        const distA2X = Math.abs(wx - 85), distA2Z = Math.abs(wz - 15);
+        const distA3X = Math.abs(wx - 95), distA3Z = Math.abs(wz - 95);
+        
+        let nearAltar = false;
+        let ax = 0, az = 0;
+        let distAX = 999, distAZ = 999;
+        
+        if (distA1X <= 4 && distA1Z <= 4) { nearAltar = true; ax = 15; az = 85; distAX = distA1X; distAZ = distA1Z; }
+        else if (distA2X <= 4 && distA2Z <= 4) { nearAltar = true; ax = 85; az = 15; distAX = distA2X; distAZ = distA2Z; }
+        else if (distA3X <= 4 && distA3Z <= 4) { nearAltar = true; ax = 95; az = 95; distAX = distA3X; distAZ = distA3Z; }
 
-          // Build a towering marble-obsidian pillar for Altar indicators
-          if (isAltar1 || isAltar2 || isAltar3) {
-            // Fill bottom levels to towering height (e.g. Y=35)
-            for (let ly = 1; ly <= 35; ly++) {
-              ck.set(x, ly, z, 11); // Obsidian column
+        if (nearAltar) {
+          // Clear natural dirt/rocks from h+1 up to CH-15 to make a clean vertical tower opening
+          for (let ly = h + 1; ly < CH - 15; ly++) {
+            ck.set(x, ly, z, 0); // Air
+          }
+          
+          // ─── 5x5 Stepped Base at Y = h+1 ───
+          if (distAX <= 2 && distAZ <= 2) {
+            ck.set(x, h + 1, z, 16); // Brick base
+          }
+          // ─── 3x3 Stepped Center at Y = h+2 ───
+          if (distAX <= 1 && distAZ <= 1) {
+            ck.set(x, h + 2, z, 11); // Obsidian center
+          }
+          
+          // ─── Tower Shaft ───
+          // Clean central 1x1 obsidian core up to Y=35
+          if (wx === ax && wz === az) {
+            for (let ly = h + 1; ly <= 35; ly++) {
+              ck.set(x, ly, z, 11); // Solid Obsidian Column
             }
-            ck.set(x, 36, z, 14); // Gold ore top cap!
-            
-            // Build visual helper cross-bridges around Altar top
-            for (let dx = -1; dx <= 1; dx++) {
-              for (let dz = -1; dz <= 1; dz++) {
-                const lx = x + dx, lz2 = z + dz;
-                if (lx >= 0 && lx < CW && lz2 >= 0 && lz2 < CW && ck.get(lx, 34, lz2) === 0) {
-                  ck.set(lx, 34, lz2, 11); // Safe obsidian bridge platform
+            ck.set(x, 36, z, 12); // Gold Ore Altar Block (Cap)!
+          }
+          
+          // Decorative corner towers around the base
+          if (distAX === 2 && distAZ === 2) {
+            for (let ly = h + 1; ly <= h + 5; ly++) {
+              ck.set(x, ly, z, 14); // Glowing Gold Ore pillars at the 4 corners of the base!
+            }
+          }
+          
+          // ─── Spiral Climbing Stairs ───
+          // Spiral staircase winding around the central core to let players reach the key easily
+          const stepsCount = 35 - (h + 3);
+          if (stepsCount > 0) {
+            for (let dy = 1; dy <= stepsCount; dy++) {
+              const ang = dy * 0.7; // stable spiral turn coefficient
+              const u = Math.round(Math.cos(ang) * 1.4);
+              const v = Math.round(Math.sin(ang) * 1.4);
+              if (wx === ax + u && wz === az + v) {
+                const stepY = h + 2 + dy;
+                // Place solid brick steps and supporting column underneath
+                for (let sy = h + 1; sy <= stepY; sy++) {
+                  ck.set(x, sy, z, 16); // Brick supports & steps
                 }
               }
             }
           }
+        }
 
-          // Build the final Legendary Sacred Chest Chamber
-          // Chest is located at X=115, Z=115. Let's sculpt around it!
-          // We carve out 7x7 air space between Y=10 and Y=18 centered at (115, 115)
-          const dxChest = wx - 1115; // relative check
-          const distChestX = Math.abs(wx - 115);
-          const distChestZ = Math.abs(wz - 115);
+        // ─── Massive 33x33 Obsidian & Brick Medieval Castle Palace ───
+        const distChestX = Math.abs(wx - 115);
+        const distChestZ = Math.abs(wz - 115);
+        
+        if (distChestX <= 16 && distChestZ <= 16) {
+          // Clear all space to open the field for the grand palace (from depth Y=12 up to sky Y=55)
+          for (let ly = 12; ly <= 55; ly++) {
+            ck.set(x, ly, z, 0); // Air
+          }
+          
+          // ─── Floors ───
+          // Foundation floor at Y=12
+          ck.set(x, 12, z, 11); // Obsidian solid bedrock foundation
+          
+          // Checkered grand palace hall floor at Y=15
+          if (distChestX <= 15 && distChestZ <= 15) {
+            const isCheckered = (wx + wz) % 2 === 0;
+            ck.set(x, 15, z, isCheckered ? 11 : 16); // Checkered Obsidian & Brick floor
+          }
+          
+          // Solid foundation under the checkered floor
+          if (distChestX <= 15 && distChestZ <= 15) {
+            ck.set(x, 13, z, 11);
+            ck.set(x, 14, z, 11);
+          }
+          
+          // ─── Giant Outer Castle Walls ───
+          if (distChestX === 15 || distChestZ === 15) {
+            // Build walls up to Y=32
+            const isPillar = (wx % 4 === 0 || wz % 4 === 0);
+            for (let ly = 15; ly <= 32; ly++) {
+              ck.set(x, ly, z, isPillar ? 16 : 11); // Checkered Brick buttresses on Obsidian wall
+            }
+            
+            // Wall Crenellations / Battlements at Y=33
+            if ((wx + wz) % 2 === 0) {
+              ck.set(x, 33, z, 11); // Obsidian battlement blocks
+            }
+          }
+          
+          // ─── Four Massive Corner Watchtowers (5x5 thick) ───
+          const isNW = (wx >= 100 && wx <= 104 && wz >= 100 && wz <= 104);
+          const isNE = (wx >= 126 && wx <= 130 && wz >= 100 && wz <= 104);
+          const isSW = (wx >= 100 && wx <= 104 && wz >= 126 && wz <= 130);
+          const isSE = (wx >= 126 && wx <= 130 && wz >= 126 && wz <= 130);
+          
+          if (isNW || isNE || isSW || isSE) {
+            // Corner towers rise much higher (up to Y=45)
+            for (let ly = 15; ly <= 45; ly++) {
+              const isOuterShell = (wx === 100 || wx === 104 || wx === 126 || wx === 130 || 
+                                    wz === 100 || wz === 104 || wz === 126 || wz === 130);
+              ck.set(x, ly, z, isOuterShell ? 14 : 11); // Gold Ore outer lining with Obsidian core
+            }
+            
+            // Peak Golden Spires on towers at Y=46 to 48
+            const tx = isNW ? 102 : (isNE ? 128 : (isSW ? 102 : 128));
+            const tz = isNW ? 102 : (isNE ? 102 : (isSW ? 128 : 128));
+            if (wx === tx && wz === tz) {
+              ck.set(x, 46, z, 14);
+              ck.set(x, 47, z, 14);
+              ck.set(x, 48, z, 12); // Gold ore tip
+            }
+          }
+          
+          // ─── Arching Grand Pillars (Inside Hall) ───
+          const isPillarPos = (
+            (wx === 108 && wz === 108) ||
+            (wx === 122 && wz === 108) ||
+            (wx === 108 && wz === 122) ||
+            (wx === 122 && wz === 122)
+          );
+          if (isPillarPos) {
+            for (let ly = 15; ly <= 32; ly++) {
+              const isBand = (ly === 17 || ly === 24 || ly === 30);
+              ck.set(x, ly, z, isBand ? 14 : 11); // Gold-banded Obsidian columns
+            }
+          }
+          
+          // ─── Grand Gateway Arched Portcullis (South interface face wz=130) ───
+          if (wz === 130 && distChestX <= 3) {
+            // Dig out entry-way tunnel through the outer wall
+            for (let ly = 16; ly <= 25; ly++) {
+              ck.set(x, ly, z, 0); // Air passage
+            }
+          }
+          
+          // ─── Grand Entrance Staircase ───
+          // Symmetrical slope downwards from wz=131 to 142
+          if (wz >= 131 && wz <= 142 && distChestX <= 3) {
+            const stairY = 15 - Math.floor((wz - 131) / 1.5); // smooth slope
+            for (let ly = 12; ly <= stairY; ly++) {
+              ck.set(x, ly, z, 16); // Brick staircase
+            }
+          }
+          
+          // ─── Central Sacred Treasure Altar ───
+          // Centered around (115, 115) of the checkered hall
           if (distChestX <= 3 && distChestZ <= 3) {
-            // First clear all natural stone/dirt and fill with air
-            for (let ly = 12; ly <= 20; ly++) {
-              ck.set(x, ly, z, 0); // Air
+            // First tier (Y=16): 7x7 diamond plate
+            if (distChestX <= 3 && distChestZ <= 3) {
+              ck.set(x, 16, z, 15); // Diamond blocks
+            }
+            // Second tier (Y=17): 5x5 gold block base
+            if (distChestX <= 2 && distChestZ <= 2) {
+              ck.set(x, 17, z, 14); // Gold Ore blocks
+            }
+            // Third tier (Y=18): 3x3 obsidian column
+            if (distChestX <= 1 && distChestZ <= 1) {
+              ck.set(x, 18, z, 11); // Obsidian pedestal base
             }
             
-            // Core floor
-            ck.set(x, 11, z, 11); // Obsidian floor base
-            
-            // Build decorative gold-corner temple pillars around outer boundary of the chamber
-            if (distChestX === 3 || distChestZ === 3) {
-              // Thick column walls
-              for (let ly = 12; ly <= 19; ly++) {
-                ck.set(x, ly, z, Math.random() < 0.3 ? 14 : 11); // Gold + Obsidian pillars
-              }
-            }
-            
-            // Surround chest with ring of lava (Lava Map) or water (Ocean Map)
-            if (distChestX === 1 && distChestZ === 1) {
-              ck.set(x, 11, z, wg.biome === 'treasure_lava' ? 13 : 5); // Lava moat or Water moat!
-            }
-
-            // Finally, place the ultimate chest block Y = 11 (which is Block 18)
+            // Finally: place the legendary chest at (115, 19, 115)
             if (wx === 115 && wz === 115) {
-              ck.set(x, 12, z, 18); // Legendary Chest block!
+              ck.set(x, 19, z, 18); // Block 18: Legendary Treasure Chest!
             }
           }
         }
