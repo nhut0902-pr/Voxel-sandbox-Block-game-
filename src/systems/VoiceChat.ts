@@ -3,7 +3,12 @@ export class VoiceChatManager {
   private localStream: MediaStream | null = null;
   private connections: Map<string, RTCPeerConnection> = new Map();
   private audioElements: Map<string, HTMLAudioElement> = new Map();
+  private audioContext: AudioContext | null = null;
+  private analysers: Map<string, AnalyserNode> = new Map();
+  private mediaStreams: Map<string, MediaStreamAudioSourceNode> = new Map();
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
   public onStateChange: (active: boolean) => void = () => {};
+  public onSpeakingChange: (speakers: string[]) => void = () => {};
   public isActive = false;
 
   constructor() {}
@@ -80,6 +85,21 @@ export class VoiceChatManager {
       this.isActive = true;
       this.onStateChange(true);
       
+      this.initAudioContext();
+      // Setup local mic analysis
+      if (this.audioContext && this.localStream) {
+        const source = this.audioContext.createMediaStreamSource(this.localStream);
+        const analyser = this.audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        this.mediaStreams.set('local', source);
+        this.analysers.set('local', analyser);
+      }
+      
+      if (!this.pollingInterval) {
+        this.pollingInterval = setInterval(() => this.pollSpeaking(), 100);
+      }
+
       // Unmute all remote audios since we joined
       this.audioElements.forEach(audio => {
         audio.muted = false;
@@ -107,6 +127,36 @@ export class VoiceChatManager {
       console.error('Microphone API error:', err);
       throw err;
     }
+  }
+
+  private initAudioContext() {
+    if (!this.audioContext) {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      this.audioContext = new AudioCtx();
+    }
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
+  }
+
+  private pollSpeaking() {
+    const speakers: string[] = [];
+    const dbThreshold = 10; // Simple arbitrary threshold on byte frequency
+
+    this.analysers.forEach((analyser, peerId) => {
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const avg = sum / dataArray.length;
+      if (avg > dbThreshold) {
+        speakers.push(peerId);
+      }
+    });
+
+    this.onSpeakingChange(speakers);
   }
 
   private getOrCreateConnection(peerId: string): RTCPeerConnection {
@@ -158,6 +208,16 @@ export class VoiceChatManager {
         document.body.appendChild(audio);
       }
       audio.srcObject = event.streams[0];
+      
+      this.initAudioContext();
+      if (this.audioContext && !this.analysers.has(peerId)) {
+        const source = this.audioContext.createMediaStreamSource(event.streams[0]);
+        const analyser = this.audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        this.mediaStreams.set(peerId, source);
+        this.analysers.set(peerId, analyser);
+      }
     };
 
     return pc;
@@ -176,16 +236,35 @@ export class VoiceChatManager {
       audio.remove();
       this.audioElements.delete(peerId);
     }
+    const stream = this.mediaStreams.get(peerId);
+    if (stream) {
+      stream.disconnect();
+      this.mediaStreams.delete(peerId);
+    }
+    this.analysers.delete(peerId);
   }
 
   public stop() {
     this.isActive = false;
     this.onStateChange(false);
     
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+    this.onSpeakingChange([]);
+    
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => t.stop());
       this.localStream = null;
     }
+    
+    const stream = this.mediaStreams.get('local');
+    if (stream) {
+      stream.disconnect();
+      this.mediaStreams.delete('local');
+    }
+    this.analysers.delete('local');
     
     const peers = Array.from(this.connections.keys());
     peers.forEach(p => this.closeConnection(p));

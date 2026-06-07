@@ -222,6 +222,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [showSOSModal, setShowSOSModal] = useState(false);
   const [invincibleSeconds, setInvincibleSeconds] = useState(0);
   const [teammates, setTeammates] = useState<{ id: string; name: string; dist: number; screenX?: number; screenY?: number; onScreen: boolean; angle: number }[]>([]);
+  const [speakingPeers, setSpeakingPeers] = useState<string[]>([]);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
 
@@ -561,6 +562,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     // Bind Voice Chat System
     if (socketService.socket) {
       voiceManager.setSocket(socketService.socket);
+      voiceManager.onSpeakingChange = (speakers: string[]) => {
+        setSpeakingPeers(speakers);
+      };
     }
 
     const remotePlayers = new Map<string, THREE.Group>();
@@ -2471,8 +2475,12 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               )}
 
               <div
-                className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
-                  isVoiceActive ? 'bg-amber-500/20 border-amber-400 text-amber-400 animate-pulse' : 'bg-slate-800'
+                className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all w-[110px] text-center flex justify-center ${
+                  isVoiceActive 
+                    ? speakingPeers.includes('local') 
+                      ? 'bg-amber-500/30 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse' 
+                      : 'bg-emerald-500/20 border-emerald-400 text-emerald-400'
+                    : 'bg-slate-800'
                 }`}
                 onClick={async () => {
                   synth.playPlace();
@@ -2489,7 +2497,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   }
                 }}
               >
-                {isVoiceActive ? '🎤 ĐANG NÓI' : '🎙️ VOICE'}
+                {isVoiceActive ? (speakingPeers.includes('local') ? '🎤 PHÁT ÂM' : '🔊 ĐÃ KẾT NỐI') : '🎙️ VOICE'}
               </div>
 
               <div
@@ -2659,6 +2667,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
           {/* TEAMMATE RADAR DIRECTIONAL TRACKING HUD SYSTEM */}
           {teammates.map((peer) => {
+            const isSpeaking = speakingPeers.includes(peer.id);
             if (peer.onScreen) {
               return (
                 <div
@@ -2667,14 +2676,15 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   style={{ left: `${peer.screenX}%`, top: `${peer.screenY}%` }}
                 >
                   {/* Visual name card with distance */}
-                  <div className="bg-slate-950/90 border border-emerald-500/70 p-1 px-2.5 rounded-lg shadow-2xl flex items-center gap-1.5 backdrop-blur-sm">
-                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                    <span className="text-[10px] font-extrabold text-emerald-300 font-sans tracking-wide leading-none">
+                  <div className={`bg-slate-950/90 border p-1 px-2.5 rounded-lg shadow-2xl flex items-center gap-1.5 backdrop-blur-sm transition-colors ${isSpeaking ? 'border-amber-400' : 'border-emerald-500/70'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isSpeaking ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                    <span className={`text-[10px] font-extrabold font-sans tracking-wide leading-none ${isSpeaking ? 'text-amber-300' : 'text-emerald-300'}`}>
                       {peer.name} : {peer.dist}m
+                      {isSpeaking && <span className="ml-1 animate-pulse">🔊</span>}
                     </span>
                   </div>
                   {/* Arrow Indicator pointing down to teammate's avatar */}
-                  <span className="text-emerald-400 text-sm font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] filter select-none animate-bounce">
+                  <span className={`text-sm font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] filter select-none animate-bounce ${isSpeaking ? 'text-amber-400' : 'text-emerald-400'}`}>
                     ▼
                   </span>
                 </div>
@@ -2697,17 +2707,18 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               return (
                 <div
                   key={peer.id}
-                  className="absolute pointer-events-none z-30 select-none -translate-x-1/2 -translate-y-1/2 bg-slate-950/90 border border-emerald-400/80 p-1.5 px-3 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.25)] flex items-center gap-1.5 backdrop-blur-md transition-all duration-300"
+                  className={`absolute pointer-events-none z-30 select-none -translate-x-1/2 -translate-y-1/2 bg-slate-950/90 border p-1.5 px-3 rounded-xl shadow-lg flex items-center gap-1.5 backdrop-blur-md transition-all duration-300 ${isSpeaking ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]' : 'border-emerald-400/80 shadow-[0_0_15px_rgba(16,185,129,0.25)]'}`}
                   style={{ left: `${cx}%`, top: `${cy}%` }}
                 >
                   <span
-                    className="text-emerald-400 text-xs font-black block select-none transform transition-transform"
+                    className={`text-xs font-black block select-none transform transition-transform ${isSpeaking ? 'text-amber-400' : 'text-emerald-400'}`}
                     style={{ transform: `rotate(${rotDeg}deg)` }}
                   >
                     ▲
                   </span>
-                  <span className="text-[10px] font-extrabold text-emerald-300 tracking-wider font-sans leading-none">
+                  <span className={`text-[10px] font-extrabold tracking-wider font-sans leading-none ${isSpeaking ? 'text-amber-300' : 'text-emerald-300'}`}>
                     {peer.name.substring(0, 10)}: {peer.dist}m
+                    {isSpeaking && <span className="ml-1">🔊</span>}
                   </span>
                 </div>
               );
