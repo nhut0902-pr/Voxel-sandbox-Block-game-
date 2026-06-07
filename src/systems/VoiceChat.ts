@@ -13,33 +13,59 @@ export class VoiceChatManager {
     if (!this.socket) return;
     
     this.socket.on('voice:offer', async (data: any) => {
-      const { from, offer } = data;
-      const pc = this.getOrCreateConnection(from);
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      this.socket.emit('voice:answer', { to: from, answer });
+      try {
+        const { from, offer } = data;
+        const pc = this.getOrCreateConnection(from);
+        
+        // Handle potential glare by rolling back if necessary, 
+        // though standard is polite peer. For simplicity, just try/catch.
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        this.socket.emit('voice:answer', { to: from, answer });
+      } catch (err) {
+        console.warn('voice:offer error', err);
+      }
     });
 
     this.socket.on('voice:answer', async (data: any) => {
-      const { from, answer } = data;
-      const pc = this.connections.get(from);
-      if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      try {
+        const { from, answer } = data;
+        const pc = this.connections.get(from);
+        if (pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+      } catch (err) {
+        console.warn('voice:answer error', err);
       }
     });
 
     this.socket.on('voice:candidate', async (data: any) => {
-      const { from, candidate } = data;
-      const pc = this.connections.get(from);
-      if (pc) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      try {
+        const { from, candidate } = data;
+        const pc = this.connections.get(from);
+        if (pc) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      } catch (err) {
+        console.warn('voice:candidate error', err);
       }
     });
 
     this.socket.on('player:leave', (data: any) => {
       const id = data.id || data.playerId;
       this.closeConnection(id);
+    });
+
+    this.socket.on('voice:peers', (peers: string[]) => {
+      peers.forEach(peerId => {
+        if (peerId !== this.socket.id) {
+          // Creating the connection will trigger onnegotiationneeded if we have a local stream
+          // which will automatically create and send the offer. If we don't have a local stream,
+          // we can just wait for the offer.
+          this.getOrCreateConnection(peerId);
+        }
+      });
     });
   }
 
@@ -54,22 +80,27 @@ export class VoiceChatManager {
       this.isActive = true;
       this.onStateChange(true);
       
-      // We broadcast to existing players that we want to initiate a voice call!
-      if (this.socket) {
-        this.socket.emit('voice:request_peers');
-        
-        // Listen to response back for peer IDs to connect to
-        this.socket.on('voice:peers', (peers: string[]) => {
-          peers.forEach(peerId => {
-            if (peerId !== this.socket.id) {
-              const pc = this.getOrCreateConnection(peerId);
-              pc.createOffer().then(offer => {
-                pc.setLocalDescription(offer);
-                this.socket.emit('voice:offer', { to: peerId, offer });
-              });
+      // Unmute all remote audios since we joined
+      this.audioElements.forEach(audio => {
+        audio.muted = false;
+        audio.play().catch(e => console.warn('Audio play prevented:', e));
+      });
+
+      // Add stream tracks to any existing PC connections we might already have
+      if (this.localStream) {
+        this.connections.forEach(pc => {
+          this.localStream!.getTracks().forEach(track => {
+            const senders = pc.getSenders();
+            if (!senders.find(s => s.track === track)) {
+              pc.addTrack(track, this.localStream!);
             }
           });
         });
+      }
+
+      // We broadcast to existing players that we want to initiate a voice call!
+      if (this.socket) {
+        this.socket.emit('voice:request_peers');
       }
       return true;
     } catch (err) {
@@ -100,12 +131,29 @@ export class VoiceChatManager {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed' || pc.iceConnectionState === 'disconnected') {
+        this.closeConnection(peerId);
+      }
+    };
+
+    pc.onnegotiationneeded = async () => {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        this.socket.emit('voice:offer', { to: peerId, offer });
+      } catch(err) {
+        console.error('Error during negotiation:', err);
+      }
+    };
+
     pc.ontrack = (event) => {
       // Create audio element for the remote stream
       let audio = this.audioElements.get(peerId);
       if (!audio) {
         audio = document.createElement('audio');
         audio.autoplay = true;
+        audio.muted = !this.isActive; // Mute if user hasn't joined voice
         this.audioElements.set(peerId, audio);
         document.body.appendChild(audio);
       }
