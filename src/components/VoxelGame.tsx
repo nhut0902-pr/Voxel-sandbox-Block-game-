@@ -1630,9 +1630,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 }
               });
 
-              // 2. Draw Legendary Chest at X=115, Z=115
-              const cx_coord = 115;
-              const cz_coord = 115;
+              // 2. Draw Legendary Chest at X=300, Z=300
+              const cx_coord = 300;
+              const cz_coord = 300;
               const cex = (cx_coord - px + r) * scale;
               const cez = (cz_coord - pz + r) * scale;
               const cdx_px = cex - size / 2;
