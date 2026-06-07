@@ -11,6 +11,9 @@ export class VoiceChatManager {
   public onSpeakingChange: (speakers: string[]) => void = () => {};
   public isActive = false;
 
+  private makingOffer: Map<string, boolean> = new Map();
+  private candidateQueue: Map<string, RTCIceCandidateInit[]> = new Map();
+
   constructor() {}
 
   public setSocket(socket: any) {
@@ -22,12 +25,27 @@ export class VoiceChatManager {
         const { from, offer } = data;
         const pc = this.getOrCreateConnection(from);
         
-        // Handle potential glare by rolling back if necessary, 
-        // though standard is polite peer. For simplicity, just try/catch.
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const polite = this.socket.id > from;
+        const offerCollision = this.makingOffer.get(from) || pc.signalingState !== 'stable';
+        
+        if (!polite && offerCollision) {
+          return; // Ignore offer
+        }
+        
+        // If polite and collision, we might need to rollback local offer, but setRemoteDescription does that implicitly if polite in modern WebRTC.
+        await Promise.all([
+          pc.setRemoteDescription(new RTCSessionDescription(offer))
+        ]);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         this.socket.emit('voice:answer', { to: from, answer });
+        
+        // Process queued ice candidates
+        const queue = this.candidateQueue.get(from);
+        if (queue) {
+          for (const c of queue) await pc.addIceCandidate(new RTCIceCandidate(c));
+          this.candidateQueue.delete(from);
+        }
       } catch (err) {
         console.warn('voice:offer error', err);
       }
@@ -39,6 +57,13 @@ export class VoiceChatManager {
         const pc = this.connections.get(from);
         if (pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          
+          // Process queued ice candidates
+          const queue = this.candidateQueue.get(from);
+          if (queue) {
+            for (const c of queue) await pc.addIceCandidate(new RTCIceCandidate(c));
+            this.candidateQueue.delete(from);
+          }
         }
       } catch (err) {
         console.warn('voice:answer error', err);
@@ -49,8 +74,12 @@ export class VoiceChatManager {
       try {
         const { from, candidate } = data;
         const pc = this.connections.get(from);
-        if (pc) {
+        if (pc && pc.remoteDescription) {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } else {
+          const queue = this.candidateQueue.get(from) || [];
+          queue.push(candidate);
+          this.candidateQueue.set(from, queue);
         }
       } catch (err) {
         console.warn('voice:candidate error', err);
@@ -182,18 +211,26 @@ export class VoiceChatManager {
     };
 
     pc.oniceconnectionstatechange = () => {
+      console.log(`[Voice] ICE Connection State: ${pc.iceConnectionState} for ${peerId}`);
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed' || pc.iceConnectionState === 'disconnected') {
         this.closeConnection(peerId);
       }
     };
+    
+    pc.onconnectionstatechange = () => {
+      console.log(`[Voice] PC Connection State: ${pc.connectionState} for ${peerId}`);
+    };
 
     pc.onnegotiationneeded = async () => {
       try {
+        this.makingOffer.set(peerId, true);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         this.socket.emit('voice:offer', { to: peerId, offer });
       } catch(err) {
         console.error('Error during negotiation:', err);
+      } finally {
+        this.makingOffer.set(peerId, false);
       }
     };
 
@@ -203,11 +240,13 @@ export class VoiceChatManager {
       if (!audio) {
         audio = document.createElement('audio');
         audio.autoplay = true;
-        audio.muted = !this.isActive; // Mute if user hasn't joined voice
+        audio.playsInline = true;
+        audio.muted = false; // Always unmute since we only connect when active
         this.audioElements.set(peerId, audio);
         document.body.appendChild(audio);
       }
       audio.srcObject = event.streams[0];
+      audio.play().catch(e => console.warn('Audio play error:', e));
       
       this.initAudioContext();
       if (this.audioContext && !this.analysers.has(peerId)) {
