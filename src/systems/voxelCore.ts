@@ -379,7 +379,7 @@ export class CM {
 
         if (nearAltar) {
           // Clear natural dirt/rocks upwards
-          for (let ly = h + 1; ly < CH - 15; ly++) {
+          for (let ly = h + 1; ly < CH; ly++) {
             ck.set(x, ly, z, 0); // Air
           }
           
@@ -434,8 +434,8 @@ export class CM {
         const distChestZ = Math.abs(wz - 300);
         
         if (distChestX <= 16 && distChestZ <= 16) {
-          // Clear all space to open the field for the grand palace (from depth Y=12 up to sky Y=55)
-          for (let ly = 12; ly <= 55; ly++) {
+          // Clear all space to open the field for the grand palace (from depth Y=12 up to sky Y=CH-1)
+          for (let ly = 12; ly < CH; ly++) {
             ck.set(x, ly, z, 0); // Air
           }
           
@@ -475,45 +475,45 @@ export class CM {
           }
           
           // ─── Four Massive Corner Watchtowers (5x5 thick) ───
-          const isNW = (wx >= 100 && wx <= 104 && wz >= 100 && wz <= 104);
-          const isNE = (wx >= 126 && wx <= 130 && wz >= 100 && wz <= 104);
-          const isSW = (wx >= 100 && wx <= 104 && wz >= 126 && wz <= 130);
-          const isSE = (wx >= 126 && wx <= 130 && wz >= 126 && wz <= 130);
+          const isNW = (wx >= 285 && wx <= 289 && wz >= 285 && wz <= 289);
+          const isNE = (wx >= 311 && wx <= 315 && wz >= 285 && wz <= 289);
+          const isSW = (wx >= 285 && wx <= 289 && wz >= 311 && wz <= 315);
+          const isSE = (wx >= 311 && wx <= 315 && wz >= 311 && wz <= 315);
           
           if (isNW || isNE || isSW || isSE) {
-            // Corner towers rise much higher (up to Y=45)
-            for (let ly = 15; ly <= 45; ly++) {
-              const isOuterShell = (wx === 100 || wx === 104 || wx === 126 || wx === 130 || 
-                                    wz === 100 || wz === 104 || wz === 126 || wz === 130);
+            // Corner towers rise much higher (up to Y=55)
+            for (let ly = 15; ly <= 55; ly++) {
+              const isOuterShell = (wx === 285 || wx === 289 || wx === 311 || wx === 315 || 
+                                    wz === 285 || wz === 289 || wz === 311 || wz === 315);
               ck.set(x, ly, z, isOuterShell ? 14 : 11); // Gold Ore outer lining with Obsidian core
             }
             
-            // Peak Golden Spires on towers at Y=46 to 48
-            const tx = isNW ? 102 : (isNE ? 128 : (isSW ? 102 : 128));
-            const tz = isNW ? 102 : (isNE ? 102 : (isSW ? 128 : 128));
+            // Peak Golden Spires on towers at Y=56 to 58
+            const tx = isNW ? 287 : (isNE ? 313 : (isSW ? 287 : 313));
+            const tz = isNW ? 287 : (isNE ? 287 : (isSW ? 313 : 313));
             if (wx === tx && wz === tz) {
-              ck.set(x, 46, z, 14);
-              ck.set(x, 47, z, 14);
-              ck.set(x, 48, z, 12); // Gold ore tip
+              ck.set(x, 56, z, 14);
+              ck.set(x, 57, z, 14);
+              ck.set(x, 58, z, 12); // Gold ore tip
             }
           }
           
           // ─── Arching Grand Pillars (Inside Hall) ───
           const isPillarPos = (
-            (wx === 108 && wz === 108) ||
-            (wx === 122 && wz === 108) ||
-            (wx === 108 && wz === 122) ||
-            (wx === 122 && wz === 122)
+            (wx === 293 && wz === 293) ||
+            (wx === 307 && wz === 293) ||
+            (wx === 293 && wz === 307) ||
+            (wx === 307 && wz === 307)
           );
           if (isPillarPos) {
-            for (let ly = 15; ly <= 32; ly++) {
-              const isBand = (ly === 17 || ly === 24 || ly === 30);
+            for (let ly = 15; ly <= 44; ly++) {
+              const isBand = (ly === 17 || ly === 24 || ly === 30 || ly === 36);
               ck.set(x, ly, z, isBand ? 14 : 11); // Gold-banded Obsidian columns
             }
           }
           
-          // ─── Grand Gateway Arched Portcullis (South interface face wz=130) ───
-          if (wz === 130 && distChestX <= 3) {
+          // ─── Grand Gateway Arched Portcullis (South interface face wz=315) ───
+          if (wz === 315 && distChestX <= 3) {
             // Dig out entry-way tunnel through the outer wall
             for (let ly = 16; ly <= 25; ly++) {
               ck.set(x, ly, z, 0); // Air passage
@@ -521,9 +521,9 @@ export class CM {
           }
           
           // ─── Grand Entrance Staircase ───
-          // Symmetrical slope downwards from wz=131 to 142
-          if (wz >= 131 && wz <= 142 && distChestX <= 3) {
-            const stairY = 15 - Math.floor((wz - 131) / 1.5); // smooth slope
+          // Symmetrical slope downwards from wz=316 to 327
+          if (wz >= 316 && wz <= 327 && distChestX <= 3) {
+            const stairY = 15 - Math.floor((wz - 316) / 1.5); // smooth slope
             for (let ly = 12; ly <= stairY; ly++) {
               ck.set(x, ly, z, 16); // Brick staircase
             }
