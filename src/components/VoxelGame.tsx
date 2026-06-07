@@ -28,6 +28,7 @@ interface GameOptions {
   name: string;
   seed: string;
   mode: 'creative' | 'survival' | 'adventure' | 'treasure';
+  difficulty?: 'easy' | 'normal' | 'hard' | 'extreme';
   biome: string;
   botCount: string;
   room: string;
@@ -162,7 +163,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [opts, setOpts] = useState<GameOptions>({
     name: 'Steve',
     seed: 'voxelverse-2026',
-    mode: 'creative',
+    mode: 'treasure',
+    difficulty: 'normal',
     biome: 'plains',
     botCount: '3',
     room: 'lobby',
@@ -174,6 +176,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const optsRef = useRef(opts);
   useEffect(() => {
     optsRef.current = opts;
+    (window as any).gameOpts = opts;
   }, [opts]);
 
   /* ─── Chat system states ─── */
@@ -772,24 +775,42 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
     const isCollectibleMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
     if (isCollectibleMode) {
-      const keysLocations = [
+      const difficulty = optsRef.current.difficulty || 'normal';
+      let keysLocations = [
         { x: -150, z: 150 },
         { x: 150, z: -150 },
         { x: -200, z: -200 }
       ];
+      let px = 300;
+      let pz = 300;
+
+      if (difficulty === 'easy') {
+        keysLocations = [{ x: -50, z: 50 }, { x: 50, z: -50 }];
+        px = 100; pz = 100;
+      } else if (difficulty === 'hard') {
+        keysLocations = [{ x: -200, z: 200 }, { x: 200, z: -200 }, { x: -300, z: -300 }, { x: 300, z: 150 }, { x: -150, z: -300 }];
+        px = 500; pz = 500;
+      } else if (difficulty === 'extreme') {
+        keysLocations = [{ x: -300, z: 300 }, { x: 300, z: -300 }, { x: -400, z: -400 }, { x: 400, z: 250 }, { x: -250, z: -400 }, { x: 450, z: 450 }, { x: -450, z: 150 }];
+        px = 800; pz = 800;
+      }
+
+      (window as any).gameKeysLoc = keysLocations;
+      (window as any).gamePalaceLoc = {x: px, z: pz};
+
       keysLocations.forEach(loc => {
         const gh = Math.max(wgen.h(loc.x, loc.z) + 10, 35);
         ents.push(new Entity('key_collectible', loc.x, gh + 2, loc.z, scene));
       });
 
       // Spawn a visible Chest Collectible floating at the palace!
-      ents.push(new Entity('chest_collectible', 300, 20, 300, scene));
+      ents.push(new Entity('chest_collectible', px, 20, pz, scene));
 
-      // Spawn 6 tough Zombie Palace Guardians inside the massive Palace at (300, 300)
+      // Spawn 6 tough Zombie Palace Guardians inside the massive Palace
       for (let k = 0; k < 6; k++) {
         const theta = (k / 6) * Math.PI * 2;
-        const gX = 300 + Math.cos(theta) * 6;
-        const gZ = 300 + Math.sin(theta) * 6;
+        const gX = px + Math.cos(theta) * 6;
+        const gZ = pz + Math.sin(theta) * 6;
         const guardian = new Entity('zombie', gX, 16, gZ, scene);
         guardian.hp = 60; // Extra health!
         guardian.cfg = {
@@ -807,8 +828,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       // Spawn Sky Zombies (Ghosts) walking on the roof of the Palace at Y=50
       for (let k = 0; k < 6; k++) {
         const theta = (k / 6) * Math.PI * 2;
-        const gX = 300 + Math.cos(theta) * 12;
-        const gZ = 300 + Math.sin(theta) * 12;
+        const gX = px + Math.cos(theta) * 12;
+        const gZ = pz + Math.sin(theta) * 12;
         const skyZombie = new Entity('zombie', gX, 52, gZ, scene);
         skyZombie.hp = 80;
         skyZombie.cfg = { 
@@ -1059,16 +1080,17 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
               if (targetMob.type === 'chest_collectible') {
                 const isTreasureMode = optsRef.current.mode === 'treasure';
+                const requiredKeys = (window as any).gameKeysLoc ? (window as any).gameKeysLoc.length : 3;
                 let opened = false;
                 
                 setBagItems(prev => {
                   const ownedKeys = prev['key'] || 0;
                   
                   if (isTreasureMode) {
-                    if (ownedKeys >= 3) {
+                    if (ownedKeys >= requiredKeys) {
                       opened = true;
                       const next = { ...prev };
-                      next['key'] = Math.max(0, ownedKeys - 3);
+                      next['key'] = Math.max(0, ownedKeys - requiredKeys);
                       
                       setTimeout(() => {
                         setIsVictory(true);
@@ -1077,7 +1099,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                       
                       return next;
                     } else {
-                      triggerToast(`❌ KHÓA TRANH CHẤP: Cần thu thập đủ 3 chìa vàng (Hiện có: ${ownedKeys}/3)`);
+                      triggerToast(`❌ KHÓA TRANH CHẤP: Cần thu thập đủ ${requiredKeys} chìa vàng (Hiện có: ${ownedKeys}/${requiredKeys})`);
                       return prev;
                     }
                   } else {
@@ -1095,7 +1117,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 return;
               }
 
-              const baseDmg = pInst.wpn?.dmg || 3;
+              const baseDmg = (pInst.wpn?.dmg || 3) + (pInst.dmgB || 0);
               if (targetMob.hit(baseDmg)) {
                 // Kill reward!
                 targetMob.remove();
@@ -1968,8 +1990,12 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       if (it.hl) p.heal(it.hl);
       if (it.spd) {
         p.spdB = it.spd;
-        triggerToast(`💊 Nhận hiệu ứng Tốc Độ +${it.spd}!`);
+        triggerToast(`💊 Nhận hiệu ứng Tốc Độ +${it.spd} trong 15s!`);
         setTimeout(() => { if (playerRef.current) playerRef.current.spdB = 0; }, 15000);
+      } else if (it.dmg) {
+        p.dmgB = it.dmg;
+        triggerToast(`💥 Nhận hiệu ứng Sức Mạnh Tấn Công +${it.dmg} trong 15s!`);
+        setTimeout(() => { if (playerRef.current) playerRef.current.dmgB = 0; }, 15000);
       } else {
         triggerToast(`💊 Đã dùng ${it.e} ${it.n}`);
       }
@@ -2100,6 +2126,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   <option value="10">10 Thảm họa</option>
                 </select>
               </div>
+              {opts.mode === 'treasure' && (
+                <div className="f">
+                  <label>Độ Khó (Treasure)</label>
+                  <select
+                    value={opts.difficulty}
+                    onChange={(e) => setOpts({ ...opts, difficulty: e.target.value as any })}
+                  >
+                    <option value="easy">Dễ (Map nhỏ, 2🔑)</option>
+                    <option value="normal">Bình thường (3🔑)</option>
+                    <option value="hard">Khó (Map to, 5🔑, Dơi độc)</option>
+                    <option value="extreme">Cực Khó (Map rồng, 7🔑)</option>
+                  </select>
+                </div>
+              )}
               <div className="f" style={{ minWidth: '180px' }}>
                 <label>🌐 Phòng Chơi (Room ID)</label>
                 <div className="flex gap-1 w-full">
@@ -2465,6 +2505,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                     onClick={() => {
                       synth.playPlace();
                       setShowSOSModal(true);
+                      if (document.pointerLockElement) {
+                        try {
+                          document.exitPointerLock();
+                        } catch(err) {}
+                      }
                     }}
                     className="pill bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-rose-500 text-white font-extrabold cursor-pointer active:scale-95 animate-pulse text-center px-3 hidden sm:flex"
                     title="Khẩn cấp tiếp tế, bảo vệ & thoát hiểm hiểm nghèo"
@@ -3396,18 +3441,17 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                 <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 3 Chìa Khóa Vàng (HIỂM ĐỊA)</h4>
+                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 {((window as any).gameKeysLoc?.length) || 3} Chìa Khóa Vàng (HIỂM ĐỊA)</h4>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    <strong className="text-amber-300">NẰM XA KHẮP PHƯƠNG TRỜI:</strong> Cả 3 chìa khóa đều lơ lửng trên không trung ở tại các tháp cổ.
-                    <br /><span className="text-emerald-400 font-semibold">Tọa độ:</span> Tây Bắc <span className="text-yellow-400 font-bold font-mono">[-150, 150]</span>, Đông Nam <span className="text-yellow-400 font-bold font-mono">[150, -150]</span>, và Phương Xa <span className="text-yellow-400 font-bold font-mono">[-200, -200]</span>.
+                    <strong className="text-amber-300">NẰM XA KHẮP PHƯƠNG TRỜI:</strong> Các chìa khóa lưu lạc ở vùng cấm địa xa xôi.
                   </p>
                 </div>
 
                 <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
                   <h4 className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🎁 Rương Thủy Tổ (TẦNG CAO CUNG ĐIỆN)</h4>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    <strong className="text-emerald-300">NẰM TRONG ĐẾ ĐÔ KHỔNG LỒ:</strong> Tọa độ cực viễn <span className="text-red-400 font-bold font-mono">[300, 300]</span>. Cung điện bị đóng nóc, rương trên cao, bạn phải đập cửa, và có bọn Dơi Quỷ biết bay tuần tra rát mặt! Nơi này bảo vệ tuyệt mật.
-                    <br /><span className="text-amber-300 font-bold">Cảnh giác:</span> Mật thất cung điện được canh giữ kiên cố bởi <span className="text-red-400 font-bold">6 siêu Zombie Vệ Binh Hoàng Gia</span> cực trâu bò. Thu thập đủ 3 chìa khóa để giải phong ấn chiến thắng!
+                    <strong className="text-emerald-300">NẰM TRONG ĐẾ ĐÔ KHỔNG LỒ:</strong> Tọa độ <span className="text-red-400 font-bold font-mono">X: {((window as any).gamePalaceLoc?.x) || 300}, Z: {((window as any).gamePalaceLoc?.z) || 300}</span>. Cung điện có bọn Dơi Quỷ biết bay tuần tra rát mặt! Nơi này bảo vệ tuyệt mật.
+                    <br /><span className="text-amber-300 font-bold">Cảnh giác:</span> Mật thất cung điện canh giữ bởi <span className="text-red-400 font-bold">Vệ Binh Hoàng Gia</span>. Thu thập đủ {((window as any).gameKeysLoc?.length) || 3} chìa khóa để giải phong ấn!
                   </p>
                 </div>
               </div>
@@ -3574,6 +3618,37 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 </div>
                 <p className="text-[10px] text-slate-400 leading-normal pl-7">
                   Cung cấp ngay <strong className="text-emerald-400">+350 Vàng</strong> để bạn nâng cấp trang bị chống chịu & cấp <strong className="text-white">Dao Thép (Sát thương 6)</strong> để nghênh chiến sinh tồn!
+                </p>
+              </button>
+
+              {/* Option 4: Teammate SOS Rescue */}
+              <button
+                onClick={() => {
+                  const pInst = playerRef.current;
+                  if (pInst) {
+                    if (teammates.length > 0) {
+                      // Attempt to send a global chat message to ping location
+                      socketService.emit('chat:msg', { msg: `🚨 SOS CẤP CỨU: Đồng đội ${opts.name} đang cần chi viện gấp tại tọa độ [${Math.floor(pInst.pos.x)}, ${Math.floor(pInst.pos.z)}]!` });
+                      triggerToast('📡 SOS: Đã phát tín hiệu cầu cứu chí tử tới radar đồng đội!');
+                      // Grant some invincible seconds just in case
+                      pInst.invincibleShieldT = 10;
+                      setInvincibleSeconds(10);
+                    } else {
+                      triggerToast('❌ KHÔNG THỂ PHÁT SOS: Không tìm thấy đồng đội nào trên liên kết Radar!');
+                    }
+                    synth.playCollect();
+                    setShowSOSModal(false);
+                  }
+                }}
+                className="w-full p-3.5 bg-gradient-to-r from-blue-950/80 to-indigo-900/40 hover:from-blue-900 hover:to-indigo-800 border-2 border-blue-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-1 text-[8px] bg-blue-500 text-white font-bold rounded-bl-lg font-mono">SOCIAL</div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">📡</span>
+                  <span className="font-extrabold text-xs text-blue-300 uppercase tracking-wide group-hover:text-blue-200">Phát Tín Hiệu SOS Đồng Đội</span>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal pl-7">
+                  Phát thông báo định vị khẩn cấp tới toàn phòng qua <strong className="text-blue-400">Hệ Thống Mạng Radar</strong> kêu gọi chi viện gấp, kèm <strong className="text-white">10 giây Khiên sinh tồn</strong>.
                 </p>
               </button>
             </div>

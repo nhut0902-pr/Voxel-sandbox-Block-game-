@@ -61,6 +61,7 @@ export const ITM: Record<string, ItemDef> = {
   sw4: { id: 'sw4', n: 'Kiếm KCương', e: '💎⚔️', dmg: 10, t: 'weapon' },
   pistol: { id: 'pistol', n: 'Súng Lục 🔫', e: '🔫', dmg: 14, t: 'weapon' },
   rifle: { id: 'rifle', n: 'Súng Trường ︻╦╤─', e: '🔫︻╦╤─', dmg: 22, t: 'weapon' },
+  laser: { id: 'laser', n: 'Súng Laser Đột Phá', e: '☄️🔫', dmg: 35, t: 'weapon' },
   axe: { id: 'axe', n: 'Rìu', e: '🪓', dmg: 4, t: 'tool' },
   pick: { id: 'pick', n: 'Cuốc', e: '⛏️', dmg: 2, t: 'tool' },
   shield: { id: 'shield', n: 'Khiên', e: '🛡️', def: 3, t: 'armor' },
@@ -72,7 +73,9 @@ export const ITM: Record<string, ItemDef> = {
   apple: { id: 'apple', n: 'Táo', e: '🍎', hg: 3, hl: 2, t: 'food' },
   meat: { id: 'meat', n: 'Thịt', e: '🍖', hg: 6, hl: 3, t: 'food' },
   pot_hp: { id: 'pot_hp', n: 'Thuốc HP', e: '🧪', hl: 10, t: 'potion' },
+  pot_hp_big: { id: 'pot_hp_big', n: 'Bình Máu Lớn', e: '💖🧪', hl: 30, t: 'potion' },
   pot_spd: { id: 'pot_spd', n: 'Thuốc Tốc', e: '⚗️', spd: 5, t: 'potion' },
+  pot_dmg: { id: 'pot_dmg', n: 'Thuốc Sức Mạnh', e: '💥🧪', dmg: 5, t: 'potion' },
   wings: { id: 'wings', n: 'Cánh', e: '🪽', fly: true, t: 'special' },
   key: { id: 'key', n: 'Chìa khóa vàng', e: '🔑', t: 'special' },
 };
@@ -90,10 +93,11 @@ export const SHOP: Record<string, ShopItem[]> = {
     { id: 'sw3', p: 80 },
     { id: 'sw4', p: 150 },
     { id: 'pistol', p: 200 },
-    { id: 'rifle', p: 350 }
+    { id: 'rifle', p: 350 },
+    { id: 'laser', p: 600 }
   ],
   tools: [{ id: 'axe', p: 20 }, { id: 'pick', p: 25 }],
-  food: [{ id: 'bread', p: 8 }, { id: 'apple', p: 6 }, { id: 'meat', p: 15 }, { id: 'pot_hp', p: 25 }, { id: 'pot_spd', p: 35 }],
+  food: [{ id: 'bread', p: 8 }, { id: 'apple', p: 6 }, { id: 'meat', p: 15 }, { id: 'pot_hp', p: 25 }, { id: 'pot_hp_big', p: 60 }, { id: 'pot_spd', p: 35 }, { id: 'pot_dmg', p: 50 }],
   special: [{ id: 'shield', p: 60 }, { id: 'helm', p: 70 }, { id: 'boots', p: 55 }, { id: 'wings', p: 300 }, { id: 'scuba', p: 120 }, { id: 'fireproof', p: 160 }],
 };
 
@@ -744,6 +748,7 @@ export class Player {
   dead: boolean;
   def: number;
   spdB: number;
+  dmgB: number = 0;
   wpn: ItemDef | null;
   lastH: number;
   oxygen: number;
@@ -1130,11 +1135,23 @@ export class Entity {
 
       if (this.st === 'chase') {
         const d = new THREE.Vector3().subVectors(player.pos, this.pos);
-        d.y = 0;
+        if (!c.fly) {
+          d.y = 0;
+        } else {
+          // Flying mobs drift towards player's Y level
+          if (Math.abs(d.y) > 0.5) {
+            this.pos.y += Math.sign(d.y) * c.spd * dt;
+          }
+        }
+        
         if (d.length() > 0.1) {
           d.normalize();
           this.pos.x += d.x * c.spd * dt;
-          this.pos.z += d.z * c.spd * dt;
+          if (!c.fly) {
+            this.pos.z += d.z * c.spd * dt;
+          } else {
+            this.pos.z += d.z * c.spd * dt;
+          }
           this.mesh.rotation.y = Math.atan2(d.x, d.z);
         }
         if (dp < 2.5 && this.aCD <= 0) {
