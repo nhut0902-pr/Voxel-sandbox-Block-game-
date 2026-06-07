@@ -20,6 +20,7 @@ import {
   sh
 } from '../systems/voxelCore';
 import { socketService } from '../systems/socketService';
+import { voiceManager } from '../systems/VoiceChat';
 import { audioSystem } from '../systems/audioSystem';
 
 /* ─── Types & Interfaces ─── */
@@ -222,6 +223,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [invincibleSeconds, setInvincibleSeconds] = useState(0);
   const [teammates, setTeammates] = useState<{ id: string; name: string; dist: number; screenX?: number; screenY?: number; onScreen: boolean; angle: number }[]>([]);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -334,6 +336,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     jumpHeld: false,
     breakOnce: false,
     placeOnce: false,
+    breakHeld: false,
+    placeHeld: false,
+    pickTimer: 0,
     _jR: 38
   });
 
@@ -462,12 +467,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     rendererRef.current = renderer;
 
     const isTreasure = optsRef.current.mode === 'treasure';
-    const activeBiome = isTreasure ? 'treasure_lava' : opts.biome;
-    const initialFogColor = isTreasure ? 0x1a0500 : 0x87ceeb;
+    // Remove forced treasure_lava biome. Let the user choose the biome, but if they had treasure_lava saved, swap to 'plains'
+    const activeBiome = (opts.biome === 'treasure_lava' || opts.biome === 'treasure_ocean') ? 'plains' : opts.biome;
+    const initialFogColor = isTreasure ? 0x87ceeb : 0x87ceeb; // Make it bright sky blue!
     scene.fog = new THREE.Fog(initialFogColor, 30, Dev.rd() * CW * 0.95);
 
     // 2. Instantiate procedural engine components
-    const dn = new DN(scene, isTreasure);
+    const dn = new DN(scene, false); // Make it use bright daytime logic (false instead of isTreasure)
     dnRef.current = dn;
 
     // Flashlight SpotLight instance
@@ -551,6 +557,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       optsRef.current.shirtColor,
       optsRef.current.pantsColor
     );
+    
+    // Bind Voice Chat System
+    if (socketService.socket) {
+      voiceManager.setSocket(socketService.socket);
+    }
 
     const remotePlayers = new Map<string, THREE.Group>();
 
@@ -758,31 +769,54 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     const isCollectibleMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
     if (isCollectibleMode) {
       const keysLocations = [
-        { x: 15, y: 37, z: 85 },
-        { x: 85, y: 37, z: 15 },
-        { x: 95, y: 37, z: 95 }
+        { x: -150, z: 150 },
+        { x: 150, z: -150 },
+        { x: -200, z: -200 }
       ];
       keysLocations.forEach(loc => {
-        ents.push(new Entity('key_collectible', loc.x, loc.y, loc.z, scene));
+        const gh = Math.max(wgen.h(loc.x, loc.z) + 10, 35);
+        ents.push(new Entity('key_collectible', loc.x, gh + 2, loc.z, scene));
       });
 
-      // Spawn 6 tough Zombie Palace Guardians inside the massive Palace at (115, 115)
+      // Spawn a visible Chest Collectible floating at the palace!
+      ents.push(new Entity('chest_collectible', 300, 20, 300, scene));
+
+      // Spawn 6 tough Zombie Palace Guardians inside the massive Palace at (300, 300)
       for (let k = 0; k < 6; k++) {
         const theta = (k / 6) * Math.PI * 2;
-        const gX = 115 + Math.cos(theta) * 6;
-        const gZ = 115 + Math.sin(theta) * 6;
+        const gX = 300 + Math.cos(theta) * 6;
+        const gZ = 300 + Math.sin(theta) * 6;
         const guardian = new Entity('zombie', gX, 16, gZ, scene);
-        guardian.hp = 40; // Double health!
+        guardian.hp = 60; // Extra health!
         guardian.cfg = {
           ...guardian.cfg,
-          hp: 40,
-          spd: 2.6, // slightly faster
-          dmg: 5,   // hits harder
-          gold: 25, // great reward!
-          xp: 30,
+          hp: 60,
+          spd: 2.8, // extremely fast
+          dmg: 8,   // hits harder
+          gold: 35, // great reward!
+          xp: 40,
           e: '🧟🛡️' // Royal guard badge!
         };
         ents.push(guardian);
+      }
+      
+      // Spawn Sky Zombies (Ghosts) walking on the roof of the Palace at Y=50
+      for (let k = 0; k < 6; k++) {
+        const theta = (k / 6) * Math.PI * 2;
+        const gX = 300 + Math.cos(theta) * 12;
+        const gZ = 300 + Math.sin(theta) * 12;
+        const skyZombie = new Entity('zombie', gX, 52, gZ, scene);
+        skyZombie.hp = 80;
+        skyZombie.cfg = { 
+          ...skyZombie.cfg, 
+          hp: 80, 
+          spd: 3.5, 
+          dmg: 10,
+          gold: 50,
+          fly: true,
+          e: '🦇' 
+        };
+        ents.push(skyZombie);
       }
     }
 
@@ -855,8 +889,14 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
     const handleMouseDown = (e: MouseEvent) => {
       if (!isPointerLocked.current) return;
-      if (e.button === 0) touchSysRef.current.breakOnce = true;
-      if (e.button === 2) touchSysRef.current.placeOnce = true;
+      if (e.button === 0) { touchSysRef.current.breakOnce = true; touchSysRef.current.breakHeld = true; }
+      if (e.button === 2) { touchSysRef.current.placeOnce = true; touchSysRef.current.placeHeld = true; }
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isPointerLocked.current) return;
+      if (e.button === 0) touchSysRef.current.breakHeld = false;
+      if (e.button === 2) touchSysRef.current.placeHeld = false;
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -865,6 +905,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     document.addEventListener('pointerlockchange', handleLockChange);
     canvasRef.current.addEventListener('click', handleCanvasClick);
     canvasRef.current.addEventListener('mousedown', handleMouseDown);
+    canvasRef.current.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('wheel', handleWheel, { passive: true });
 
     // 7. Bind window resize
@@ -1011,6 +1052,45 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           if (doBreak) {
             if (targetMob) {
               synth.playHit();
+
+              if (targetMob.type === 'chest_collectible') {
+                const isTreasureMode = optsRef.current.mode === 'treasure';
+                let opened = false;
+                
+                setBagItems(prev => {
+                  const ownedKeys = prev['key'] || 0;
+                  
+                  if (isTreasureMode) {
+                    if (ownedKeys >= 3) {
+                      opened = true;
+                      const next = { ...prev };
+                      next['key'] = Math.max(0, ownedKeys - 3);
+                      
+                      setTimeout(() => {
+                        setIsVictory(true);
+                        triggerToast('🎉 VINH QUANG: Thu Phục Rương Tối Thượng Thành Công!');
+                      }, 500);
+                      
+                      return next;
+                    } else {
+                      triggerToast(`❌ KHÓA TRANH CHẤP: Cần thu thập đủ 3 chìa vàng (Hiện có: ${ownedKeys}/3)`);
+                      return prev;
+                    }
+                  } else {
+                    opened = true; 
+                    triggerToast('🎁 QUẢ NGỌT: Bạn mở được Rương Cổ! (+1000 🪙)');
+                    setGoldCount(g => g + 1000);
+                    return prev;
+                  }
+                });
+
+                if (opened) {
+                  targetMob.dead = true;
+                  targetMob.remove();
+                }
+                return;
+              }
+
               const baseDmg = pInst.wpn?.dmg || 3;
               if (targetMob.hit(baseDmg)) {
                 // Kill reward!
@@ -1205,10 +1285,10 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         const isRadarMode = optsRef.current.mode === 'treasure' || optsRef.current.mode === 'survival' || optsRef.current.mode === 'adventure';
         if (isRadarMode && pInst) {
           const radarTargets = [
-            { name: 'Đền Thờ Phía Tây 🔑 (Trên Cao - Đỉnh Tháp Thần Y=36)', x: 15, y: 36, z: 85, type: 'key' as const },
-            { name: 'Đền Thờ Phía Đông 🔑 (Trên Cao - Đỉnh Tháp Thần Y=36)', x: 85, y: 36, z: 15, type: 'key' as const },
-            { name: 'Đền Thờ Trung Tâm 🔑 (Trên Cao - Đỉnh Tháp Thần Y=36)', x: 95, y: 36, z: 95, type: 'key' as const },
-            { name: 'Cung Điện Cổ Tự 🎁 (Rương Thủy Tổ ở Thờ Điện Trệt Y=19)', x: 115, y: 19, z: 115, type: 'chest' as const }
+            { name: 'Đền Thờ Phía Tây Bắc 🔑 (Hiểm Địa)', x: -150, y: 40, z: 150, type: 'key' as const },
+            { name: 'Đền Thờ Phía Đông Nam 🔑 (Hiểm Địa)', x: 150, y: 40, z: -150, type: 'key' as const },
+            { name: 'Đền Thờ Vực Thẳm 🔑 (Ngoại Vi Khỏi Bản Đồ)', x: -200, y: 40, z: -200, type: 'key' as const },
+            { name: 'Đế Đô Thủy Tổ 🎁 (Bảo Vệ Kín Mít! Y=20)', x: 300, y: 20, z: 300, type: 'chest' as const }
           ];
 
           let nearestWarn: { name: string; dist: number; type: 'key' | 'chest' } | null = null;
@@ -1327,30 +1407,59 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             continue;
           }
 
-          if (mob.type === 'key_collectible') {
-            // Spin key, wave vertically, check player proximity
+          if (mob.type === 'key_collectible' || mob.type === 'chest_collectible') {
+            // Spin, wave vertically, check player proximity
             if (mob.mesh) {
-              mob.mesh.rotation.y += dt * 2.5;
+              mob.mesh.rotation.y += dt * 1.5;
               if ((mob as any)._ph === undefined) (mob as any)._ph = Math.random() * 10;
-              (mob as any)._ph += dt * 3.5;
+              (mob as any)._ph += dt * 2.5;
               mob.mesh.position.y = mob.pos.y + Math.sin((mob as any)._ph) * 0.15;
             }
 
-            const dp = mob.pos.distanceTo(pInst.pos);
-            if (dp < 1.8) {
-              mob.dead = true;
-              mob.remove();
-              entsRef.current.splice(i, 1);
-
-              setBagItems(prev => {
-                const updated = { ...prev };
-                updated['key'] = (updated['key'] || 0) + 1;
-                return updated;
-              });
-              pInst.gold += 150;
-              setGoldCount(pInst.gold);
-              triggerToast('🔑 THU THẬP THÀNH CÔNG CHÌA KHÓA VÀNG HUYỀN THOẠI! (+150🪙)');
-              synth.playCollect();
+            if (mob.type === 'key_collectible') {
+              const dp = mob.pos.distanceTo(pInst.pos);
+              
+              if (dp < 3.0) {
+                if (tInst.breakHeld) {
+                  tInst.pickTimer += dt;
+                  const el = document.getElementById('pickProgressOuter');
+                  if (el) el.style.display = 'block';
+                  const bar = document.getElementById('pickProgressBar');
+                  if (bar) bar.style.width = Math.min(100, (tInst.pickTimer / 3.0) * 100) + '%';
+                  
+                  if (tInst.pickTimer >= 3.0) {
+                    // Harvested!
+                    mob.dead = true;
+                    mob.remove();
+                    entsRef.current.splice(i, 1);
+  
+                    setBagItems(prev => {
+                      const updated = { ...prev };
+                      updated['key'] = (updated['key'] || 0) + 1;
+                      return updated;
+                    });
+                    pInst.gold += 150;
+                    setGoldCount(pInst.gold);
+                    triggerToast('🔑 THU THẬP THÀNH CÔNG CHÌA KHÓA VÀNG HUYỀN THOẠI! (+150🪙)');
+                    synth.playCollect();
+                    tInst.pickTimer = 0;
+                    if (el) el.style.display = 'none';
+                  }
+                } else {
+                  tInst.pickTimer = 0;
+                  const el = document.getElementById('pickProgressOuter');
+                  if (el) el.style.display = 'none';
+                }
+              } else {
+                // Not near
+                // Note: since this loops over all keys, setting pickTimer to 0 here could reset it if another key was being picked.
+                // But only one key is nearby at a time.
+                const el = document.getElementById('pickProgressOuter');
+                if (el && tInst.pickTimer > 0) {
+                  // Only reset if we were actually picking 
+                  // But wait, the player could be far from ALL keys. We will handle hiding elsewhere if needed, but it's safe to just hide if far from the target key they were picking.
+                }
+              }
             }
             continue; // Bypass standard monster chasing mechanics
           }
@@ -1829,10 +1938,12 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     const tInst = touchSysRef.current;
     if (type === 'jump') {
       tInst.jumpHeld = isStart;
-    } else if (type === 'break' && isStart) {
-      tInst.breakOnce = true;
-    } else if (type === 'place' && isStart) {
-      tInst.placeOnce = true;
+    } else if (type === 'break') {
+      tInst.breakHeld = isStart;
+      if (isStart) tInst.breakOnce = true;
+    } else if (type === 'place') {
+      tInst.placeHeld = isStart;
+      if (isStart) tInst.placeOnce = true;
     }
   };
 
@@ -1946,8 +2057,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 >
                   {opts.mode === 'treasure' ? (
                     <>
-                      <option value="treasure_lava">🔥 Vực Thẳm Dung Nham (Săn rương sâu thẳm)</option>
-                      <option value="treasure_ocean">🌊 Đại Dương Sâu Lạnh (Lặn biển đáy sâu)</option>
+                      <option value="plains">Thảo Nguyên (Mặc định)</option>
+                      <option value="desert">Hoang Mạc Cát</option>
+                      <option value="cherry">Rừng Hoa Anh Đào</option>
                     </>
                   ) : (
                     <>
@@ -2170,7 +2282,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                     setOpts(prev => ({ 
                       ...prev, 
                       mode: 'treasure',
-                      biome: (prev.biome === 'treasure_lava' || prev.biome === 'treasure_ocean') ? prev.biome : 'treasure_lava'
+                      biome: 'plains'
                     }));
                     if (playerRef.current) playerRef.current.fly = false;
                     setCurrentBadge('👑 TREASURE');
@@ -2313,6 +2425,73 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             </div>
             
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setFlashlightActive(prev => {
+                    const next = !prev;
+                    triggerToast('Đèn Pin: ' + (next ? 'BẬT 🔦 (L)' : 'TẮT 🔇'));
+                    return next;
+                  });
+                }}
+                className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
+                  flashlightActive
+                    ? 'border-yellow-400 text-yellow-300 shadow-yellow-500/10'
+                    : 'border-slate-700 text-slate-400 opacity-80 hover:opacity-100 hover:border-slate-500'
+                }`}
+                title="Bật/Tắt Đèn pin (Phím L)"
+              >
+                <span>🔦 {flashlightActive ? 'Đèn: BẬT' : 'Đèn: TẮT'}</span>
+                <span className="opacity-50 text-[9px] font-mono px-1 bg-slate-950/80 rounded hidden sm:inline">[L]</span>
+              </button>
+
+              {opts.mode === 'treasure' && (
+                <>
+                  <button
+                    onClick={() => {
+                      synth.playPlace();
+                      setShowTreasureGuide(true);
+                    }}
+                    className="pill bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 hover:shadow-yellow-500/20 border-yellow-400 font-extrabold cursor-pointer active:scale-95 text-center px-3"
+                    title="Xem cẩm nang bản đồ và tọa độ chìa khóa"
+                  >
+                    📖 HƯỚNG DẪN
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      synth.playPlace();
+                      setShowSOSModal(true);
+                    }}
+                    className="pill bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-rose-500 text-white font-extrabold cursor-pointer active:scale-95 animate-pulse text-center px-3 hidden sm:flex"
+                    title="Khẩn cấp tiếp tế, bảo vệ & thoát hiểm hiểm nghèo"
+                  >
+                    🚨 SOS CỨU TRỢ
+                  </button>
+                </>
+              )}
+
+              <div
+                className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
+                  isVoiceActive ? 'bg-amber-500/20 border-amber-400 text-amber-400 animate-pulse' : 'bg-slate-800'
+                }`}
+                onClick={async () => {
+                  synth.playPlace();
+                  try {
+                    const nowActive = await voiceManager.toggleVoice(opts.room || 'lobby');
+                    setIsVoiceActive(nowActive);
+                    if (nowActive) {
+                      triggerToast('🎤 Đã kết nối Voice Chat vùng (WebRTC)!');
+                    } else {
+                      triggerToast('🔇 Đã ngắt kết nối Voice Chat');
+                    }
+                  } catch (e: any) {
+                    triggerToast(`❌ Lỗi Voice: ${e.message || "Không có quyền Mic"}`);
+                  }
+                }}
+              >
+                {isVoiceActive ? '🎤 ĐANG NÓI' : '🎙️ VOICE'}
+              </div>
+
               <div
                 className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
                   showChat ? 'bg-emerald-500/20 border-emerald-400 text-emerald-400' : ''
@@ -2338,7 +2517,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
               <button
                 type="button"
-                className="pill cursor-pointer select-none font-bold active:scale-95 bg-emerald-600 border border-emerald-500 text-white hover:bg-emerald-400 hidden sm:flex"
+                className="pill cursor-pointer select-none font-bold active:scale-95 bg-emerald-600 border border-emerald-500 text-white hover:bg-emerald-400 hidden lg:flex"
                 onClick={() => {
                   copyInviteLink();
                   synth.playPlace();
@@ -2348,10 +2527,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               </button>
               <button
                 type="button"
-                className="pill cursor-pointer select-none font-bold active:scale-95 bg-slate-900 border border-slate-700 hidden sm:flex"
+                className="pill cursor-pointer select-none font-bold active:scale-95 bg-slate-900 border border-slate-700 hidden lg:flex"
                 onClick={toggleFullscreen}
               >
                 🖥️ TOÀN MÀN HÌNH
+              </button>
+              
+              <button 
+                className={`pill cursor-pointer select-none font-bold active:scale-95 transition-all ${
+                  showSettings ? 'border-emerald-500 bg-slate-800' : 'border-slate-700'
+                }`}
+                onClick={() => setShowSettings(!showSettings)}
+                title="Cài đặt hệ thống (Esc)"
+              >
+                ⚙️
               </button>
             </div>
           </div>
@@ -2527,6 +2716,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
           {/* Display screen Crosshair targeting point */}
           <div className="ch"></div>
+
+          {/* Key Collectible Pick Progress Bar */}
+          <div id="pickProgressOuter" className="absolute top-[55%] left-1/2 -translate-x-1/2 w-48 h-3 bg-slate-950/80 border border-slate-700 rounded-full overflow-hidden hidden pointer-events-none z-40">
+            <div id="pickProgressBar" className="h-full bg-amber-400 w-0 transition-all duration-[50ms] ease-out shadow-[0_0_10px_rgba(251,191,36,0.6)]"></div>
+          </div>
 
           {/* Keyboard inputs desk guide */}
           <div className="help select-none leading-relaxed font-semibold">
@@ -3146,7 +3340,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               <div className="flex justify-between text-xs">
                 <span className="text-slate-400">Bản đồ thử thách:</span>
                 <span className="text-emerald-400 font-bold">
-                  {opts.biome === 'treasure_lava' ? '🔥 Vực Thẳm Dung Nham' : '🌊 Đại Dương Sâu Lạnh'}
+                  {opts.biome.toUpperCase()}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
@@ -3191,17 +3385,17 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                 <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 3 Chìa Khóa Vàng (Ở TRÊN CAO)</h4>
+                  <h4 className="font-bold text-amber-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🔑 3 Chìa Khóa Vàng (HIỂM ĐỊA)</h4>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    <strong className="text-amber-300">NẰM TRÊN CAO CHÓT VÓT:</strong> Cả 3 chìa khóa đều ở độ cao lơ lửng <span className="text-yellow-400 font-bold font-mono">Y: 36</span> trên đỉnh các tháp cổ tự hắc diện thạch, <span className="text-red-400 font-bold">KHÔNG nằm dưới lòng đất</span>. 
-                    <br /><span className="text-emerald-400 font-semibold">Tọa độ:</span> Tây <span className="text-yellow-400 font-bold font-mono">[15, 85]</span>, Đông <span className="text-yellow-400 font-bold font-mono">[85, 15]</span>, và Trung tâm <span className="text-yellow-400 font-bold font-mono">[95, 95]</span>. Hãy leo theo cầu thang gạch xoắn ốc quanh cột trụ để lượm!
+                    <strong className="text-amber-300">NẰM XA KHẮP PHƯƠNG TRỜI:</strong> Cả 3 chìa khóa đều lơ lửng trên không trung ở tại các tháp cổ.
+                    <br /><span className="text-emerald-400 font-semibold">Tọa độ:</span> Tây Bắc <span className="text-yellow-400 font-bold font-mono">[-150, 150]</span>, Đông Nam <span className="text-yellow-400 font-bold font-mono">[150, -150]</span>, và Phương Xa <span className="text-yellow-400 font-bold font-mono">[-200, -200]</span>.
                   </p>
                 </div>
 
                 <div className="bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-                  <h4 className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🎁 Rương Thủy Tổ (TẦNG TRỆT)</h4>
+                  <h4 className="font-bold text-emerald-400 mb-1 flex items-center gap-1 text-xs uppercase tracking-wide">🎁 Rương Thủy Tổ (TẦNG CAO CUNG ĐIỆN)</h4>
                   <p className="text-[11px] text-slate-400 leading-normal">
-                    <strong className="text-emerald-300">NẰM TRONG CUNG ĐIỆN KHỔNG LỒ:</strong> Ở tọa độ trung tâm <span className="text-red-400 font-bold font-mono">X: 115, Z: 115</span> trên bệ thờ vàng & kim cương cao quý (<span className="text-emerald-300 font-bold font-mono">Y: 19</span>).
+                    <strong className="text-emerald-300">NẰM TRONG ĐẾ ĐÔ KHỔNG LỒ:</strong> Tọa độ cực viễn <span className="text-red-400 font-bold font-mono">[300, 300]</span>. Cung điện bị đóng nóc, rương trên cao, bạn phải đập cửa, và có bọn Dơi Quỷ biết bay tuần tra rát mặt! Nơi này bảo vệ tuyệt mật.
                     <br /><span className="text-amber-300 font-bold">Cảnh giác:</span> Mật thất cung điện được canh giữ kiên cố bởi <span className="text-red-400 font-bold">6 siêu Zombie Vệ Binh Hoàng Gia</span> cực trâu bò. Thu thập đủ 3 chìa khóa để giải phong ấn chiến thắng!
                   </p>
                 </div>
@@ -3239,57 +3433,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         </div>
       )}
 
-      {/* ─── HUD TOP BUTTONS OVERLAY ROW ─── */}
-      {isPlaying && (
-        <div className="absolute top-4 right-16 z-20 flex items-center gap-2 select-none pointer-events-auto">
-          {/* Flashlight button */}
-          <button
-            onClick={() => {
-              setFlashlightActive(prev => {
-                const next = !prev;
-                triggerToast('Đèn Pin: ' + (next ? 'BẬT 🔦 (L)' : 'TẮT 🔇'));
-                return next;
-              });
-            }}
-            className={`h-10 px-3 bg-slate-900/95 border-2 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all shadow-xl active:scale-95 cursor-pointer ${
-              flashlightActive 
-                ? 'border-yellow-400 text-yellow-300 shadow-yellow-500/10' 
-                : 'border-slate-700 text-slate-400 opacity-80 hover:opacity-100 hover:border-slate-500'
-            }`}
-            title="Bật/Tắt Đèn pin (Phím L)"
-          >
-            <span>🔦 {flashlightActive ? 'Đèn: BẬT' : 'Đèn: TẮT'}</span>
-            <span className="opacity-50 text-[9px] font-mono px-1 bg-slate-950/80 rounded">[L]</span>
-          </button>
 
-          {/* Treasure hunt guidance button */}
-          {opts.mode === 'treasure' && (
-            <>
-              <button
-                onClick={() => {
-                  synth.playPlace();
-                  setShowTreasureGuide(true);
-                }}
-                className="h-10 px-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 hover:shadow-yellow-500/20 border-2 border-yellow-400 font-extrabold text-xs tracking-wider rounded-xl flex items-center justify-center gap-1 shadow-xl transition-all cursor-pointer active:scale-95 text-center"
-                title="Xem cẩm nang bản đồ và tọa độ chìa khóa"
-              >
-                📖 HƯỚNG DẪN
-              </button>
-
-              <button
-                onClick={() => {
-                  synth.playPlace();
-                  setShowSOSModal(true);
-                }}
-                className="h-10 px-3 flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-2 border-rose-500 text-white font-extrabold text-xs tracking-wider rounded-xl shadow-xl transition-all cursor-pointer active:scale-95 animate-pulse text-center"
-                title="Khẩn cấp tiếp tế, bảo vệ & thoát hiểm hiểm nghèo"
-              >
-                🚨 SOS CỨU TRỢ
-              </button>
-            </>
-          )}
-        </div>
-      )}
 
       {/* ─── SOS SHIELD VISUAL OVERLAY HALO ─── */}
       {isPlaying && invincibleSeconds > 0 && (
@@ -3437,15 +3581,6 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           </div>
         </div>
       )}
-
-      {/* ─── SETTINGS (PAUSE) MENU ─── */}
-      <button 
-        className={`absolute top-4 right-4 z-20 w-10 h-10 bg-slate-900/80 border-2 ${showSettings ? 'border-emerald-500' : 'border-slate-700'} rounded flex items-center justify-center text-xl hover:bg-slate-800 transition-colors shadow-lg active:scale-95`}
-        onClick={() => setShowSettings(!showSettings)}
-        title="Cài đặt hệ thống (Esc)"
-      >
-        ⚙️
-      </button>
 
       {showSettings && (
         <div className="absolute inset-0 z-[15] bg-black/60 backdrop-blur-sm flex items-center justify-center">

@@ -117,6 +117,33 @@ async function startServer() {
       }
     });
 
+    // Voice Chat Signaling
+    socket.on('voice:request_peers', () => {
+      const p = players.get(socket.id);
+      if (p) {
+        // Return list of other peers in the room
+        const peersInRoom: string[] = [];
+        players.forEach((otherP, pid) => {
+          if (otherP.room === p.room && pid !== socket.id) {
+            peersInRoom.push(pid);
+          }
+        });
+        socket.emit('voice:peers', peersInRoom);
+      }
+    });
+
+    socket.on('voice:offer', (data) => {
+      socket.to(data.to).emit('voice:offer', { from: socket.id, offer: data.offer });
+    });
+
+    socket.on('voice:answer', (data) => {
+      socket.to(data.to).emit('voice:answer', { from: socket.id, answer: data.answer });
+    });
+
+    socket.on('voice:candidate', (data) => {
+      socket.to(data.to).emit('voice:candidate', { from: socket.id, candidate: data.candidate });
+    });
+
     // Latency measuring
     socket.on('latency:ping', (timestamp) => {
       socket.emit('latency:pong', timestamp);

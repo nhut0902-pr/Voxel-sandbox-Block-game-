@@ -1,6 +1,6 @@
 {
   "name": "Voxel Sandbox Crafting & Surviving",
   "description": "An immersive first-person voxel sandbox game inspired by Minecraft with procedural terrain generation, crafting, shop and quest systems, hostile/passive mobs, sound effects, and online multiplayer.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

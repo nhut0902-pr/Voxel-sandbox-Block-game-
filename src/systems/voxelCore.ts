@@ -359,11 +359,7 @@ export class CM {
           
           // Ensure we don't spawn onto a tree trunk or leaves
           if (ck.get(x, h + 1, z) === 0) {
-            if (absR < 0.003) {
-              ck.set(x, h + 1, z, 18); // Block 18: Treasure Chest 🎁
-            } else if (absR < 0.011) {
-              ck.set(x, h + 1, z, 19); // Block 19: Golden Key Block 🔑
-            }
+            // (Removed random block chests and keys)
           }
         }
 
@@ -382,11 +378,13 @@ export class CM {
         else if (distA3X <= 4 && distA3Z <= 4) { nearAltar = true; ax = 95; az = 95; distAX = distA3X; distAZ = distA3Z; }
 
         if (nearAltar) {
-          // Clear natural dirt/rocks from h+1 up to CH-15 to make a clean vertical tower opening
+          // Clear natural dirt/rocks upwards
           for (let ly = h + 1; ly < CH - 15; ly++) {
             ck.set(x, ly, z, 0); // Air
           }
           
+          const maxTowerY = Math.max(h + 10, 35);
+
           // ─── 5x5 Stepped Base at Y = h+1 ───
           if (distAX <= 2 && distAZ <= 2) {
             ck.set(x, h + 1, z, 16); // Brick base
@@ -397,12 +395,12 @@ export class CM {
           }
           
           // ─── Tower Shaft ───
-          // Clean central 1x1 obsidian core up to Y=35
+          // Clean central 1x1 obsidian core up to maxTowerY
           if (wx === ax && wz === az) {
-            for (let ly = h + 1; ly <= 35; ly++) {
+            for (let ly = h + 1; ly <= maxTowerY; ly++) {
               ck.set(x, ly, z, 11); // Solid Obsidian Column
             }
-            ck.set(x, 36, z, 12); // Gold Ore Altar Block (Cap)!
+            ck.set(x, maxTowerY + 1, z, 12); // Gold Ore Altar Block (Cap)!
           }
           
           // Decorative corner towers around the base
@@ -414,7 +412,7 @@ export class CM {
           
           // ─── Spiral Climbing Stairs ───
           // Spiral staircase winding around the central core to let players reach the key easily
-          const stepsCount = 35 - (h + 3);
+          const stepsCount = maxTowerY - (h + 3);
           if (stepsCount > 0) {
             for (let dy = 1; dy <= stepsCount; dy++) {
               const ang = dy * 0.7; // stable spiral turn coefficient
@@ -432,8 +430,8 @@ export class CM {
         }
 
         // ─── Massive 33x33 Obsidian & Brick Medieval Castle Palace ───
-        const distChestX = Math.abs(wx - 115);
-        const distChestZ = Math.abs(wz - 115);
+        const distChestX = Math.abs(wx - 300);
+        const distChestZ = Math.abs(wz - 300);
         
         if (distChestX <= 16 && distChestZ <= 16) {
           // Clear all space to open the field for the grand palace (from depth Y=12 up to sky Y=55)
@@ -459,16 +457,21 @@ export class CM {
           
           // ─── Giant Outer Castle Walls ───
           if (distChestX === 15 || distChestZ === 15) {
-            // Build walls up to Y=32
+            // Build walls up to Y=45 to meet the roof
             const isPillar = (wx % 4 === 0 || wz % 4 === 0);
-            for (let ly = 15; ly <= 32; ly++) {
+            for (let ly = 15; ly <= 45; ly++) {
               ck.set(x, ly, z, isPillar ? 16 : 11); // Checkered Brick buttresses on Obsidian wall
             }
             
-            // Wall Crenellations / Battlements at Y=33
+            // Wall Crenellations / Battlements at Y=46
             if ((wx + wz) % 2 === 0) {
-              ck.set(x, 33, z, 11); // Obsidian battlement blocks
+              ck.set(x, 46, z, 11); // Obsidian battlement blocks
             }
+          }
+          
+          // ─── Flat Enclosed Roof at Y=45 ───
+          if (distChestX <= 14 && distChestZ <= 14) {
+             ck.set(x, 45, z, 11); // Obsidian Flat Impenetrable Roof
           }
           
           // ─── Four Massive Corner Watchtowers (5x5 thick) ───
@@ -542,8 +545,8 @@ export class CM {
               ck.set(x, 18, z, 11); // Obsidian pedestal base
             }
             
-            // Finally: place the legendary chest at (115, 19, 115)
-            if (wx === 115 && wz === 115) {
+            // Finally: place the legendary chest at (300, 19, 300)
+            if (wx === 300 && wz === 300) {
               ck.set(x, 19, z, 18); // Block 18: Legendary Treasure Chest!
             }
           }
@@ -1003,43 +1006,57 @@ export class Entity {
     this.scene = scene;
 
     if (type === 'key_collectible') {
-      // Create a gorgeous blocky gold key Group
       const gGroup = new THREE.Group();
-      const goldMat = new THREE.MeshStandardMaterial({
-        color: 0xffd700,
-        metalness: 0.9,
-        roughness: 0.1,
-        emissive: 0x3d3000
-      });
-      // Stem shaft
-      const stem = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), goldMat);
-      stem.position.set(0, 0, 0);
-      gGroup.add(stem);
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.font = '90px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255, 215, 0, 1)';
+        ctx.shadowBlur = 20;
+        ctx.fillText('🔑', 64, 64);
+      }
+      
+      const map = new THREE.CanvasTexture(canvas);
+      map.needsUpdate = true;
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.magFilter = THREE.LinearFilter;
+      map.minFilter = THREE.LinearMipmapLinearFilter;
+      
+      const spriteMat = new THREE.SpriteMaterial({ map: map, transparent: true });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.scale.set(2, 2, 2);
+      
+      gGroup.add(sprite);
 
-      // Handle loop (ring parts)
-      const topB = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.1), goldMat);
-      topB.position.set(0, 0.35, 0);
-      gGroup.add(topB);
-      const botB = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.1), goldMat);
-      botB.position.set(0, 0.15, 0);
-      gGroup.add(botB);
-      const leftB = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.1), goldMat);
-      leftB.position.set(-0.135, 0.25, 0);
-      gGroup.add(leftB);
-      const rightB = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.1), goldMat);
-      rightB.position.set(0.135, 0.25, 0);
-      gGroup.add(rightB);
-
-      // Teeth
-      const tooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.1), goldMat);
-      tooth1.position.set(0.12, -0.12, 0);
-      gGroup.add(tooth1);
-      const tooth2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.1), goldMat);
-      tooth2.position.set(0.10, -0.22, 0);
-      gGroup.add(tooth2);
+      // Add a bright point light so it acts as a beacon!
+      const light = new THREE.PointLight(0xffd700, 2, 15);
+      gGroup.add(light);
 
       this.mesh = gGroup as any;
       this.head = null as any;
+      this.mesh.position.copy(this.pos);
+      scene.add(this.mesh);
+    } else if (type === 'chest_collectible') {
+      const gGroup = new THREE.Group();
+      // Main box
+      const chestMat = new THREE.MeshLambertMaterial({ color: 0xd9a741 });
+      const chestBox = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.8), chestMat);
+      gGroup.add(chestBox);
+      // Red ribbon wrap
+      const ribMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const rib1 = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.62, 0.1), ribMat);
+      const rib2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.82), ribMat);
+      gGroup.add(rib1);
+      gGroup.add(rib2);
+      
+      this.mesh = gGroup as any;
+      this.head = null as any;
+      this.mesh.position.copy(this.pos);
       scene.add(this.mesh);
     } else {
       const c = this.cfg;
@@ -1156,11 +1173,14 @@ export class Entity {
       }
     }
 
-    if (!world.wGet(~~this.pos.x, ~~this.pos.y - 1, ~~this.pos.z)) {
+    if (!this.cfg.fly && !world.wGet(~~this.pos.x, ~~this.pos.y - 1, ~~this.pos.z)) {
       this.pos.y = Math.max(1, this.pos.y - 4 * dt);
     }
+    
     this._ph += dt * 5;
-    this.mesh.position.set(this.pos.x, this.pos.y + c.h / 2 + Math.abs(Math.sin(this._ph)) * 0.04, this.pos.z);
+    const hoverOffset = this.cfg.fly ? Math.sin(this._ph * 0.5) * 0.5 : Math.abs(Math.sin(this._ph)) * 0.04;
+    this.mesh.position.set(this.pos.x, this.pos.y + c.h / 2 + hoverOffset, this.pos.z);
+    
     if (this.head) this.head.rotation.x = Math.sin(this._ph) * 0.08;
   }
 
