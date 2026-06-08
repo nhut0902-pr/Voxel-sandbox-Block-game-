@@ -3843,15 +3843,16 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 onClick={() => {
                   const pInst = playerRef.current;
                   if (pInst) {
-                    if (teammates.length > 0) {
-                      // Attempt to send a global chat message to ping location
-                      socketService.emit('chat:msg', { msg: `🚨 SOS CẤP CỨU: Đồng đội ${opts.name} đang cần chi viện gấp tại tọa độ [${Math.floor(pInst.pos.x)}, ${Math.floor(pInst.pos.z)}]!` });
+                    if (socketService.socket?.connected) {
+                      // Emit SOS signal to the multiplayer room using correct chat broadcast event 'chat:send'
+                      const sosMessage = `🚨 SOS CẤP CỨU: Đồng đội ${opts.name} đang cần chi viện gấp tại tọa độ [X: ${Math.floor(pInst.pos.x)}, Y: ${Math.floor(pInst.pos.y)}, Z: ${Math.floor(pInst.pos.z)}]!`;
+                      socketService.emit('chat:send', sosMessage);
                       triggerToast('📡 SOS: Đã phát tín hiệu cầu cứu chí tử tới radar đồng đội!');
                       // Grant some invincible seconds just in case
-                      pInst.invincibleShieldT = 10;
-                      setInvincibleSeconds(10);
+                      pInst.invincibleShieldT = 15;
+                      setInvincibleSeconds(15);
                     } else {
-                      triggerToast('❌ KHÔNG THỂ PHÁT SOS: Không tìm thấy đồng đội nào trên liên kết Radar!');
+                      triggerToast('❌ KHÔNG THỂ PHÁT SOS: Bạn không ở trong phòng chơi mạng hoặc chưa có kết nối Radar!');
                     }
                     synth.playCollect();
                     setShowSOSModal(false);
