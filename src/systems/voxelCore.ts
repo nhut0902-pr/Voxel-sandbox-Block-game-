@@ -1323,8 +1323,10 @@ export class DN {
     }
   }
 
-  upd(dt: number, playerPos?: THREE.Vector3): void {
-    this.t = (this.t + this.spd * dt * 60) % 1;
+  upd(dt: number, playerPos?: THREE.Vector3, isMultiplayer = false): void {
+    if (!isMultiplayer) {
+      this.t = (this.t + this.spd * dt * 60) % 1;
+    }
     const ang = this.t * Math.PI * 2 - Math.PI / 2, R = 260;
     this.sun.position.set(Math.cos(ang) * R, Math.sin(ang) * R, 40);
     this.moon.position.set(-Math.cos(ang) * R, -Math.sin(ang) * R, 40);

@@ -21,7 +21,8 @@ export class SocketService {
     room: string,
     skinColor?: string,
     shirtColor?: string,
-    pantsColor?: string
+    pantsColor?: string,
+    gameOptions?: any
   ): void {
     if (this.socket) {
       this.socket.disconnect();
@@ -47,7 +48,8 @@ export class SocketService {
         room: room || 'lobby',
         skinColor,
         shirtColor,
-        pantsColor
+        pantsColor,
+        gameOptions
       });
     });
 

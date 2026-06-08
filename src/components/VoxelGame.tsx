@@ -199,6 +199,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [coordsText, setCoordsText] = useState('0, 0, 0');
   const [timeLabel, setTimeLabel] = useState('12:00');
   const [timePercent, setTimePercent] = useState(35);
+  const [survivalDay, setSurvivalDay] = useState(1);
   const [isNight, setIsNight] = useState(false);
   const [goldCount, setGoldCount] = useState(0);
   const [hp, setHp] = useState(20);
@@ -474,7 +475,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
     const isTreasure = optsRef.current.mode === 'treasure';
     // Remove forced treasure_lava biome. Let the user choose the biome, but if they had treasure_lava saved, swap to 'plains'
-    const activeBiome = (opts.biome === 'treasure_lava' || opts.biome === 'treasure_ocean') ? 'plains' : opts.biome;
+    const activeBiome = (optsRef.current.biome === 'treasure_lava' || optsRef.current.biome === 'treasure_ocean') ? 'plains' : optsRef.current.biome;
     const initialFogColor = isTreasure ? 0x87ceeb : 0x87ceeb; // Make it bright sky blue!
     scene.fog = new THREE.Fog(initialFogColor, 30, Dev.rd() * CW * 0.95);
 
@@ -489,7 +490,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     scene.add(fLight.target);
     flashlightRef.current = fLight;
 
-    const wgen = new WGen(opts.seed, activeBiome);
+    const wgen = new WGen(optsRef.current.seed, activeBiome);
     const cmgr = new CM(scene, wgen);
     chunkMgrRef.current = cmgr;
 
@@ -561,7 +562,8 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       optsRef.current.room || 'lobby',
       optsRef.current.skinColor,
       optsRef.current.shirtColor,
-      optsRef.current.pantsColor
+      optsRef.current.pantsColor,
+      optsRef.current
     );
     
     // Bind Voice Chat System
@@ -732,6 +734,59 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     socketService.on('latency:pong', (timestamp: number) => {
       const rtt = Math.round(performance.now() - timestamp);
       setPing(rtt);
+    });
+
+    // Listen to initial room sync immediately upon connection
+    socketService.on('room:initial_sync', ({ keys, t, dayCount, victory }) => {
+      setSurvivalDay(dayCount || 1);
+      if (keys != null) {
+        setBagItems(prev => ({ ...prev, key: keys }));
+      }
+      if (t != null && dnRef.current) {
+        dnRef.current.t = t;
+      }
+      if (victory) {
+        setIsVictory(true);
+        setVictoryMsg('🏆 THẾ GIỚI CŨNG ĐÃ CHIẾN THẮNG: Phòng chơi này đã hoàn thành khai mở cổ báu rương!');
+      }
+    });
+
+    // Sync room time tick precisely from server heartbeat
+    socketService.on('room:time_sync', ({ t }) => {
+      if (dnRef.current && t != null) {
+        const dInst = dnRef.current;
+        dInst.t = t;
+        setTimeLabel(dInst.lbl());
+        setTimePercent(dInst.t * 100);
+        setIsNight(dInst.night());
+      }
+    });
+
+    // Listen to next survival day transition
+    socketService.on('room:new_day', ({ dayCount }) => {
+      setSurvivalDay(dayCount || 1);
+      triggerToast(`🌅 BẮT ĐẦU NGÀY THỨ ${dayCount}! Kỳ tích sinh tồn tiếp diễn.`);
+      synth.playCollect();
+    });
+
+    // Listen to coop keys gathered or spent
+    socketService.on('room:keys_sync', ({ keysCollected, collector, opener }) => {
+      setBagItems(prev => ({ ...prev, key: keysCollected }));
+      if (collector) {
+        triggerToast(`🔑 ĐỒNG ĐỘI ${collector.toUpperCase()} ĐÃ THU THẬP ĐƯỢC 1 CHÌA KHÓA VÀNG!`);
+        synth.playCollect();
+      } else if (opener) {
+        triggerToast(`🎁 ĐỒNG ĐỘI ${opener.toUpperCase()} ĐÃ DÙNG CHÌA KHÓA MỞ RƯƠNG THÀNH CÔNG!`);
+        synth.playCollect();
+      }
+    });
+
+    // Listen to shared victory trigger
+    socketService.on('room:victory_sync', ({ opener }) => {
+      setBagItems(prev => ({ ...prev, key: 0 }));
+      setIsVictory(true);
+      setVictoryMsg(`🏆 ĐỒNG ĐỘI CHIẾN THẮNG! Chiến binh vĩ đại ${opener.toUpperCase()} đã giải mã và chinh phục thành công Rương Cổ Báu Thủy Tổ!`);
+      synth.playCollect();
     });
 
     const pingTimer = setInterval(() => {
@@ -1091,6 +1146,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   if (isTreasureMode) {
                     if (ownedKeys >= requiredKeys) {
                       opened = true;
+                      if (socketService.socket?.connected) {
+                        socketService.emit('room:victory', { name: optsRef.current.name });
+                      }
                       const next = { ...prev };
                       next['key'] = Math.max(0, ownedKeys - requiredKeys);
                       
@@ -1171,6 +1229,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   if (isTreasureMode) {
                     if (ownedKeys >= 3) {
                       opened = true;
+                      if (socketService.socket?.connected) {
+                        socketService.emit('room:victory', { name: optsRef.current.name });
+                      }
                       const next = { ...prev };
                       next['key'] = Math.max(0, ownedKeys - 3);
                       
@@ -1184,6 +1245,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                   } else {
                     if (ownedKeys > 0) {
                       opened = true;
+                      if (socketService.socket?.connected) {
+                        socketService.emit('room:deduct_key', { name: optsRef.current.name });
+                      }
                       const next = { ...prev };
                       next['key'] = Math.max(0, ownedKeys - 1);
                       
@@ -1223,14 +1287,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 }, 80);
               } else if (bId === 19) {
                 // Gold Key Block
-                setBagItems(prev => {
-                  const next = { ...prev };
-                  next['key'] = (next['key'] || 0) + 1;
-                  return next;
-                });
-                triggerToast('🔑 THU THẬP ĐƯỢC 1 CHÌA KHÓA VÀNG!');
-                pInst.gold += 15;
-                setGoldCount(pInst.gold);
+                if (socketService.socket?.connected) {
+                  socketService.emit('room:add_key', { name: optsRef.current.name });
+                  pInst.gold += 15;
+                  setGoldCount(pInst.gold);
+                } else {
+                  setBagItems(prev => {
+                    const next = { ...prev };
+                    next['key'] = (next['key'] || 0) + 1;
+                    return next;
+                  });
+                  triggerToast('🔑 THU THẬP ĐƯỢC 1 CHÌA KHÓA VÀNG!');
+                  pInst.gold += 15;
+                  setGoldCount(pInst.gold);
+                }
               } else {
                 if (bId > 0) {
                   setBagItems(prev => {
@@ -1278,7 +1348,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         }
 
         // Atmosphere update (passing player position to drift/wrap clouds)
-        dInst.upd(dt, pInst.pos);
+        dInst.upd(dt, pInst.pos, !!socketService.socket?.connected);
         setTimeLabel(dInst.lbl());
         setTimePercent(dInst.t * 100);
         
@@ -1461,14 +1531,18 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                     mob.remove();
                     entsRef.current.splice(i, 1);
   
-                    setBagItems(prev => {
-                      const updated = { ...prev };
-                      updated['key'] = (updated['key'] || 0) + 1;
-                      return updated;
-                    });
-                    pInst.gold += 150;
-                    setGoldCount(pInst.gold);
-                    triggerToast('🔑 THU THẬP THÀNH CÔNG CHÌA KHÓA VÀNG HUYỀN THOẠI! (+150🪙)');
+                    if (socketService.socket?.connected) {
+                      socketService.emit('room:add_key', { name: optsRef.current.name });
+                      pInst.gold += 150;
+                      setGoldCount(pInst.gold);
+                    } else {
+                      setBagItems(prev => {
+                        const updated = { ...prev };
+                        updated['key'] = (updated['key'] || 0) + 1;
+                        return updated;
+                      });
+                      triggerToast('🔑 THU THẬP THÀNH CÔNG CHÌA KHÓA VÀNG HUYỀN THOẠI! (+150🪙)');
+                    }
                     synth.playCollect();
                     tInst.pickTimer = 0;
                     if (el) el.style.display = 'none';
@@ -2476,8 +2550,43 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             <div className="mt-2 text-center">
               <button
                 className="btn font-black text-slate-900 leading-none shadow-emerald-400/20 active:scale-95 m-0 w-full"
-                onClick={() => {
+                onClick={async () => {
                   synth.init();
+                  
+                  if (roomAction === 'join') {
+                    const roomNameInput = (opts.room || '').trim();
+                    if (!roomNameInput) {
+                      triggerToast('⚠️ LỖI: Hãy nhập ID phòng muốn truy cập!');
+                      return;
+                    }
+                    try {
+                      // Fetch room state from server
+                      const res = await fetch(`/api/room-config?room=${encodeURIComponent(roomNameInput)}`);
+                      const data = await res.json();
+                      if (data.exists && data.config) {
+                        const config = data.config;
+                        // Build full custom synchronized options
+                        const updatedOpts = {
+                          ...opts,
+                          room: roomNameInput,
+                          seed: config.seed,
+                          biome: config.biome,
+                          mode: config.mode,
+                          difficulty: config.difficulty,
+                          botCount: config.botCount
+                        };
+                        optsRef.current = updatedOpts;
+                        setOpts(updatedOpts);
+                        triggerToast(`✨ ĐỒNG BỘ THÀNH CÔNG: Đã kết nối với phòng ${roomNameInput.toUpperCase()}! Bản đồ: ${config.biome.toUpperCase()}`);
+                      } else {
+                        triggerToast(`ℹ️ Tạo phòng mới với ID: ${roomNameInput.toUpperCase()}`);
+                      }
+                    } catch (err) {
+                      console.error('Error syncing room options:', err);
+                      triggerToast('⚠️ CẢNH BÁO: Không kết nối được bộ điều khiển phòng, chơi chế độ ngoại tuyến.');
+                    }
+                  }
+                  
                   setIsPlaying(true);
                 }}
               >
@@ -2753,7 +2862,10 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           )}
 
           {/* Linear sky solar tracking pill */}
-          <div id="timePill">
+          <div id="timePill" className="flex items-center gap-2">
+            <span className="bg-slate-950 border border-slate-800 text-emerald-400 font-sans font-black text-[9px] px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
+              NGÀY {survivalDay}
+            </span>
             <span>{isNight ? '🌙' : '☀️'}</span>
             <div id="timebar">
               <div
@@ -2768,6 +2880,22 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             </div>
             <span className="font-mono font-bold leading-none">{timeLabel}</span>
           </div>
+
+          {/* Cooperative shared keys tracking pill */}
+          {opts.mode === 'treasure' && (
+            <div
+              id="keysPill"
+              title="Số lượng chìa khóa vàng cả đội đã thu thập chung!"
+              onClick={() => {
+                triggerToast('🔑 Chìa khóa vàng chia sẻ chung toàn phòng! Cùng nhau đi tìm & gom đủ chìa khóa mở Rương Thủy Tổ nhé.');
+                synth.playCollect();
+              }}
+            >
+              🔑 <span className="font-mono font-black text-amber-400">{bagItems['key'] || 0}</span>
+              <span className="text-[10px] text-blue-400 font-bold font-sans">/</span>
+              <span className="font-mono text-slate-400">{(window as any).gameKeysLoc?.length || 3}</span>
+            </div>
+          )}
 
           {/* Gold wallet pill */}
           <div

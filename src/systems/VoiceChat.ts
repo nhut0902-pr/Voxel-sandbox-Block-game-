@@ -240,7 +240,7 @@ export class VoiceChatManager {
       if (!audio) {
         audio = document.createElement('audio');
         audio.autoplay = true;
-        audio.playsInline = true;
+        audio.setAttribute('playsinline', 'true');
         audio.muted = false; // Always unmute since we only connect when active
         this.audioElements.set(peerId, audio);
         document.body.appendChild(audio);
