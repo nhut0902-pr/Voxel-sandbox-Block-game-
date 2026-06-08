@@ -228,6 +228,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [speakingPeers, setSpeakingPeers] = useState<string[]>([]);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [roomAction, setRoomAction] = useState<'create' | 'join'>('create');
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -430,6 +431,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       const urlMode = params.get('mode');
       
       if (urlRoom || urlSeed || urlBiome || urlMode) {
+        setRoomAction('join');
         setOpts((prev) => ({
           ...prev,
           room: urlRoom || prev.room,
@@ -2067,7 +2069,41 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         <div id="menu">
           <div className="mc shadow-2xl relative border-dashed">
             <h1 className="logo font-black tracking-tight select-none">VOXELVERSE 2.0</h1>
-            <p className="tag">Phiên bản Sandbox Cực Hạn  · 2026</p>
+            <p className="tag text-slate-400 mb-3 text-center text-xs">Phiên bản Sandbox Cực Hạn  · 2026</p>
+
+            {/* ─── ROOM HOST/JOIN SWITCHER ─── */}
+            <div className="flex bg-slate-900 border border-slate-700/60 p-1 rounded-2xl mb-4 gap-1.5 justify-center select-none">
+              <button
+                type="button"
+                className={`flex-1 py-2 px-1 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+                  roomAction === 'create'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+                onClick={() => {
+                  setRoomAction('create');
+                  synth.playPlace();
+                  triggerToast('👑 CHỦ PHÒNG: Tự do tùy chọn Biome, Seed, Độ Khó & Quái!');
+                }}
+              >
+                👑 TẠO PHÒNG MỚI (Host)
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-2 px-1 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+                  roomAction === 'join'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-950/40 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+                onClick={() => {
+                  setRoomAction('join');
+                  synth.playPlace();
+                  triggerToast('📡 THAM GIA: Chờ đồng bộ thế giới từ ID phòng chơi!');
+                }}
+              >
+                📡 THAM GIA PHÒNG (Join)
+              </button>
+            </div>
 
             <div className="row">
               <div className="f">
@@ -2080,9 +2116,14 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 />
               </div>
               <div className="f">
-                <label>Biomes Thế Giới</label>
+                <label className="flex items-center gap-1">
+                  Biomes Thế Giới 
+                  {roomAction === 'join' && <span className="text-[9px] text-blue-400 font-bold font-mono">[KHÓA JOIN]</span>}
+                </label>
                 <select
                   value={opts.biome}
+                  disabled={roomAction === 'join'}
+                  style={roomAction === 'join' ? { opacity: 0.5, cursor: 'not-allowed', backgroundColor: '#0f172a' } : {}}
                   onChange={(e) => setOpts({ ...opts, biome: e.target.value })}
                 >
                   {opts.mode === 'treasure' ? (
@@ -2107,17 +2148,27 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
             <div className="row">
               <div className="f">
-                <label>Seed Kỹ Thuật Số</label>
+                <label className="flex items-center gap-1">
+                  Seed Kỹ Thuật Số
+                  {roomAction === 'join' && <span className="text-[9px] text-blue-400 font-bold font-mono">[KHÓA]</span>}
+                </label>
                 <input
                   type="text"
                   value={opts.seed}
+                  disabled={roomAction === 'join'}
+                  style={roomAction === 'join' ? { opacity: 0.5, cursor: 'not-allowed', backgroundColor: '#0f172a' } : {}}
                   onChange={(e) => setOpts({ ...opts, seed: e.target.value })}
                 />
               </div>
               <div className="f">
-                <label>Số Lượng Bots Quái</label>
+                <label className="flex items-center gap-1">
+                  Số Lượng Bots Quái
+                  {roomAction === 'join' && <span className="text-[9px] text-blue-400 font-bold font-mono">[KHÓA]</span>}
+                </label>
                 <select
                   value={opts.botCount}
+                  disabled={roomAction === 'join'}
+                  style={roomAction === 'join' ? { opacity: 0.5, cursor: 'not-allowed', backgroundColor: '#0f172a' } : {}}
                   onChange={(e) => setOpts({ ...opts, botCount: e.target.value })}
                 >
                   <option value="0">Không có</option>
@@ -2128,9 +2179,14 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               </div>
               {opts.mode === 'treasure' && (
                 <div className="f">
-                  <label>Độ Khó (Treasure)</label>
+                  <label className="flex items-center gap-1">
+                    Độ Khó (Treasure)
+                    {roomAction === 'join' && <span className="text-[9px] text-blue-400 font-bold font-mono">[KHÓA]</span>}
+                  </label>
                   <select
                     value={opts.difficulty}
+                    disabled={roomAction === 'join'}
+                    style={roomAction === 'join' ? { opacity: 0.5, cursor: 'not-allowed', backgroundColor: '#0f172a' } : {}}
                     onChange={(e) => setOpts({ ...opts, difficulty: e.target.value as any })}
                   >
                     <option value="easy">Dễ (Map nhỏ, 2🔑)</option>
@@ -2141,39 +2197,49 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 </div>
               )}
               <div className="f" style={{ minWidth: '180px' }}>
-                <label>🌐 Phòng Chơi (Room ID)</label>
+                <label className="flex items-center gap-1">
+                  🌐 {roomAction === 'create' ? 'Tạo Mã Sảnh Phòng' : 'Mã Phòng Muốn Join'}
+                </label>
                 <div className="flex gap-1 w-full">
                   <input
                     type="text"
                     value={opts.room}
-                    placeholder="lobby"
-                    className="flex-1 min-w-[70px]"
+                    placeholder={roomAction === 'create' ? "lobby" : "Nhập Room ID..."}
+                    className={`flex-1 min-w-[70px] ${roomAction === 'join' ? 'border-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.2)] bg-blue-950/20' : ''}`}
                     onChange={(e) => setOpts({ ...opts, room: e.target.value })}
                   />
-                  <button
-                    type="button"
-                    className="px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
-                    title="Phòng ngẫu nhiên"
-                    onClick={() => {
-                      const randRoom = 'room-' + ~~(Math.random() * 9000 + 1000);
-                      setOpts((prev) => ({ ...prev, room: randRoom }));
-                      synth.playPlace();
-                      triggerToast('✨ Đã tạo mã phòng ngẫu nhiên!');
-                    }}
-                  >
-                    🎲
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
-                    title="Sao chép liên kết mời"
-                    onClick={() => {
-                      copyInviteLink();
-                      synth.playPlace();
-                    }}
-                  >
-                    🔗 Mời
-                  </button>
+                  {roomAction === 'create' ? (
+                    <>
+                      <button
+                        type="button"
+                        className="px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
+                        title="Tạo mã phòng ngẫu nhiên"
+                        onClick={() => {
+                          const randRoom = 'room-' + ~~(Math.random() * 9000 + 1000);
+                          setOpts((prev) => ({ ...prev, room: randRoom }));
+                          synth.playPlace();
+                          triggerToast('✨ Đã tạo mã phòng ngẫu nhiên!');
+                        }}
+                      >
+                        🎲 Ngẫu Nhiên
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0"
+                        title="Sao chép liên kết mời"
+                        onClick={() => {
+                          copyInviteLink();
+                          synth.playPlace();
+                        }}
+                      >
+                        🔗 Mời Bạn
+                      </button>
+                    </>
+                  ) : (
+                    <div className="px-3 bg-blue-600/20 border border-blue-500/40 text-blue-300 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 tracking-widest select-none uppercase">
+                      📡 Sẵn Sàng Join
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2278,12 +2344,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             </div>
 
             <div className="mt-4">
-              <label className="block mb-1 font-bold">Chế Độ Chơi Game</label>
+              <label className="block mb-1 font-bold flex items-center gap-1.5">
+                Chế Độ Chơi Game
+                {roomAction === 'join' && <span className="text-xs text-blue-400 font-black font-sans bg-blue-950/60 border border-blue-800/80 px-2 py-0.5 rounded-md uppercase">Đã đồng bộ từ Phòng</span>}
+              </label>
               <div className="mg">
                 <button
                   type="button"
-                  className={`mc2 ${opts.mode === 'creative' ? 's' : ''}`}
+                  className={`mc2 ${opts.mode === 'creative' ? 's' : ''} ${roomAction === 'join' ? 'opacity-65 cursor-not-allowed hover:bg-transparent' : ''}`}
                   onClick={() => {
+                    if (roomAction === 'join') {
+                      triggerToast('🔒 KHÔNG THỂ THAY ĐỔI: Chế độ chơi đã được đồng bộ với sảnh người khác!');
+                      synth.playHit();
+                      return;
+                    }
                     setOpts(prev => ({ ...prev, mode: 'creative' }));
                     if (playerRef.current) playerRef.current.fly = true;
                     setCurrentBadge('🎨 CREATIVE');
@@ -2295,8 +2369,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 </button>
                 <button
                   type="button"
-                  className={`mc2 ${opts.mode === 'survival' ? 's' : ''}`}
+                  className={`mc2 ${opts.mode === 'survival' ? 's' : ''} ${roomAction === 'join' ? 'opacity-65 cursor-not-allowed hover:bg-transparent' : ''}`}
                   onClick={() => {
+                    if (roomAction === 'join') {
+                      triggerToast('🔒 KHÔNG THỂ THAY ĐỔI: Chế độ chơi đã được đồng bộ với sảnh người khác!');
+                      synth.playHit();
+                      return;
+                    }
                     setOpts(prev => ({ ...prev, mode: 'survival' }));
                     if (playerRef.current) playerRef.current.fly = false;
                     setCurrentBadge('⚔️ SURVIVAL');
@@ -2308,8 +2387,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 </button>
                 <button
                   type="button"
-                  className={`mc2 ${opts.mode === 'adventure' ? 's' : ''}`}
+                  className={`mc2 ${opts.mode === 'adventure' ? 's' : ''} ${roomAction === 'join' ? 'opacity-65 cursor-not-allowed hover:bg-transparent' : ''}`}
                   onClick={() => {
+                    if (roomAction === 'join') {
+                      triggerToast('🔒 KHÔNG THỂ THAY ĐỔI: Chế độ chơi đã được đồng bộ với sảnh người khác!');
+                      synth.playHit();
+                      return;
+                    }
                     setOpts(prev => ({ ...prev, mode: 'adventure' }));
                     if (playerRef.current) playerRef.current.fly = false;
                     setCurrentBadge('🗺️ ADVENTURE');
@@ -2321,8 +2405,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 </button>
                 <button
                   type="button"
-                  className={`mc2 ${opts.mode === 'treasure' ? 's' : ''}`}
+                  className={`mc2 ${opts.mode === 'treasure' ? 's' : ''} ${roomAction === 'join' ? 'opacity-65 cursor-not-allowed hover:bg-transparent' : ''}`}
                   onClick={() => {
+                    if (roomAction === 'join') {
+                      triggerToast('🔒 KHÔNG THỂ THAY ĐỔI: Chế độ chơi đã được đồng bộ với sảnh người khác!');
+                      synth.playHit();
+                      return;
+                    }
                     setOpts(prev => ({ 
                       ...prev, 
                       mode: 'treasure',
