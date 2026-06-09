@@ -420,6 +420,7 @@ export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) 
     breakHeld: false,
     placeHeld: false,
     pickTimer: 0,
+    lastShotT: 0,
     _jR: 38
   });
 
@@ -1152,10 +1153,20 @@ export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) 
         tInst.ldy = 0;
 
         // Collect aggregate breaks & placements
-        const doBreak = tInst.breakOnce;
+        let doBreak = tInst.breakOnce;
         const doPlace = tInst.placeOnce;
         tInst.breakOnce = false;
         tInst.placeOnce = false;
+
+        const wpnId = pInst.wpn?.id;
+        if (tInst.breakHeld && (wpnId === 'spam' || wpnId === 'rifle' || wpnId === 'laser' || wpnId === 'rocket')) {
+            const fireRateMap: Record<string, number> = { 'spam': 80, 'rifle': 150, 'laser': 120, 'rocket': 600 };
+            const rate = fireRateMap[wpnId] || 300;
+            if (now - tInst.lastShotT > rate) {
+                doBreak = true;
+                tInst.lastShotT = now;
+            }
+        }
 
         // Update player physics state
         if (!pInst.dead) {
@@ -1228,7 +1239,7 @@ export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) 
           const pDir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pInst.pitch, pInst.yaw, 0, 'YXZ')).normalize();
 
           let targetMob: Entity | null = null;
-          let minMobDist = 5;
+          let minMobDist = pInst.wpn?.range || 5;
           for (const ent of entsRef.current) {
             if (ent.dead) continue;
             const distToPlayer = ent.pos.distanceTo(ori);
@@ -1297,6 +1308,41 @@ export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) 
               }
 
               const baseDmg = (pInst.wpn?.dmg || 3) + (pInst.dmgB || 0);
+              const wpnRange = pInst.wpn?.range || 0;
+              if (wpnRange >= 15 && sceneRef.current) {
+                 const geometry = new THREE.BufferGeometry().setFromPoints([ori, targetMob.pos.clone().add(new THREE.Vector3(0, targetMob.cfg.h / 2, 0))]);
+                 const material = new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 2 });
+                 const wId = pInst.wpn?.id;
+                 if (wId === 'laser') material.color.setHex(0x00ffff);
+                 if (wId === 'spam') material.color.setHex(0xff0000);
+                 if (wId === 'artillery') material.color.setHex(0xff8800);
+                 if (wId === 'rocket') material.color.setHex(0xff5500);
+                 const line = new THREE.Line(geometry, material);
+                 sceneRef.current.add(line);
+
+                 // Explosion visual for explosive weapons
+                 if (wId === 'spam' || wId === 'artillery' || wId === 'rocket') {
+                     const expGeo = new THREE.SphereGeometry(targetMob.cfg.w * 2, 8, 8);
+                     const expMat = new THREE.MeshBasicMaterial({ color: material.color, transparent: true, opacity: 0.8 });
+                     const expMesh = new THREE.Mesh(expGeo, expMat);
+                     expMesh.position.copy(targetMob.pos).add(new THREE.Vector3(0, targetMob.cfg.h / 2, 0));
+                     sceneRef.current.add(expMesh);
+                     
+                     let ticks = 0;
+                     const expInt = setInterval(() => {
+                         ticks++;
+                         expMesh.scale.multiplyScalar(1.2);
+                         expMat.opacity -= 0.15;
+                         if (ticks > 6) {
+                             clearInterval(expInt);
+                             sceneRef.current?.remove(expMesh);
+                         }
+                     }, 30);
+                 }
+
+                 setTimeout(() => sceneRef.current?.remove(line), 100);
+              }
+
               if (targetMob.hit(baseDmg)) {
                 // Kill reward!
                 targetMob.remove();

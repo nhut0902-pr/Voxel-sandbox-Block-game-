@@ -52,6 +52,7 @@ export interface ItemDef {
   hg?: number;
   hl?: number;
   fly?: boolean;
+  range?: number;
   t: 'weapon' | 'tool' | 'armor' | 'food' | 'potion' | 'special';
 }
 
@@ -61,9 +62,13 @@ export const ITM: Record<string, ItemDef> = {
   knife: { id: 'knife', n: 'Dao Thép', e: '🔪', dmg: 6, t: 'weapon' },
   sw3: { id: 'sw3', n: 'Kiếm Vàng', e: '🔱', dmg: 7, t: 'weapon' },
   sw4: { id: 'sw4', n: 'Kiếm KCương', e: '💎⚔️', dmg: 10, t: 'weapon' },
-  pistol: { id: 'pistol', n: 'Súng Lục 🔫', e: '🔫', dmg: 14, t: 'weapon' },
-  rifle: { id: 'rifle', n: 'Súng Trường ︻╦╤─', e: '🔫︻╦╤─', dmg: 22, t: 'weapon' },
-  laser: { id: 'laser', n: 'Súng Laser Đột Phá', e: '☄️🔫', dmg: 35, t: 'weapon' },
+  pistol: { id: 'pistol', n: 'Súng Lục 🔫', e: '🔫', dmg: 14, range: 15, t: 'weapon' },
+  rifle: { id: 'rifle', n: 'Súng Trường ︻╦╤─', e: '🔫︻╦╤─', dmg: 22, range: 25, t: 'weapon' },
+  laser: { id: 'laser', n: 'Súng Laser Đột Phá', e: '☄️🔫', dmg: 35, range: 20, t: 'weapon' },
+  sniper: { id: 'sniper', n: 'Súng Bắn Xa', e: '🔭', dmg: 30, range: 40, t: 'weapon' },
+  rocket: { id: 'rocket', n: 'Súng Tên Lửa', e: '🚀', dmg: 50, range: 60, t: 'weapon' },
+  artillery: { id: 'artillery', n: 'Súng Pháo', e: '☄️', dmg: 80, range: 100, t: 'weapon' },
+  spam: { id: 'spam', n: 'Súng Spam Nổ', e: '💥', dmg: 150, range: 9999, t: 'weapon' },
   axe: { id: 'axe', n: 'Rìu', e: '🪓', dmg: 4, t: 'tool' },
   pick: { id: 'pick', n: 'Cuốc', e: '⛏️', dmg: 2, t: 'tool' },
   shield: { id: 'shield', n: 'Khiên', e: '🛡️', def: 3, t: 'armor' },
@@ -99,7 +104,11 @@ export const SHOP: Record<string, ShopItem[]> = {
     { id: 'sw4', p: 150 },
     { id: 'pistol', p: 200 },
     { id: 'rifle', p: 350 },
-    { id: 'laser', p: 600 }
+    { id: 'laser', p: 600 },
+    { id: 'sniper', p: 800 },
+    { id: 'rocket', p: 1200 },
+    { id: 'artillery', p: 2000 },
+    { id: 'spam', p: 5000 }
   ],
   tools: [{ id: 'axe', p: 20 }, { id: 'pick', p: 25 }],
   food: [{ id: 'bread', p: 8 }, { id: 'apple', p: 6 }, { id: 'meat', p: 15 }, { id: 'pot_hp', p: 25 }, { id: 'pot_hp_big', p: 60 }, { id: 'pot_spd', p: 35 }, { id: 'pot_dmg', p: 50 }],
