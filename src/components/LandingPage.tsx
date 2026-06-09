@@ -655,7 +655,7 @@ export default function LandingPage({ onEnterGame }: LandingPageProps) {
                 {['labrador', 'poodle'].map(pet => (
                   <button key={pet} onClick={() => setTempOptions({...tempOptions, companionPet: pet as any})} className={`p-4 border-2 rounded-md ${tempOptions.companionPet === pet ? 'border-[#5ba8ff]' : 'border-white/10'} hover:border-[#5ba8ff]/50 transition-all`}>
                      <div className="w-20 h-20 bg-slate-800 flex items-center justify-center text-xs text-slate-500 mb-2 border border-white/10 rounded overflow-hidden">
-                        <img src={`/${pet === 'labrador' ? 'dog-labrador.webp.png' : 'dog-poodle.webp.png'}`} alt={pet} className="w-full h-full object-cover" />
+                        <img src={`/${pet === 'labrador' ? 'dog-labrador.png' : 'dog-poodle.png'}`} alt={pet} className="w-full h-full object-cover" />
                      </div>
                      <span className="text-xs">{pet === 'labrador' ? '🐶 Cún' : '🐩 Poodle'}</span>
                   </button>

@@ -660,9 +660,9 @@ export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) 
       let textureUrl = '';
       
       if (type === 'labrador' || type === 'loyal_dog') {
-        textureUrl = '/dog-labrador.webp.png';
+        textureUrl = '/dog-labrador.png';
       } else if (type === 'poodle' || type === 'cute_poodle') {
-        textureUrl = '/dog-poodle.webp.png';
+        textureUrl = '/dog-poodle.png';
       } else if (type === 'robot_drone' || type === 'rescue_drone' || type === 'steel_robot') {
         textureUrl = '/robot-drone-voxel.webp';
       }
@@ -4274,7 +4274,7 @@ export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) 
              <div className="absolute -top-7 text-[9px] text-white font-bold bg-blue-600/80 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">GỌI DRONE CỨU TRỢ</div>
              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800/80 border-2 border-blue-500 rounded-full flex items-center justify-center overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.5)] cursor-pointer relative" style={{ backdropFilter: 'blur(4px)' }}>
                  <div className="absolute inset-0 bg-blue-500/20 active:bg-blue-500/50 transition-colors pointer-events-none" />
-                 <img src={opts.companionPet === 'poodle' ? '/dog-poodle.webp.png' : '/dog-labrador.webp.png'} className="w-10 h-10 sm:w-12 sm:h-12 object-cover relative z-10 drop-shadow-md pointer-events-none" alt="Pet Rescue" />
+                 <img src={opts.companionPet === 'poodle' ? '/dog-poodle.png' : '/dog-labrador.png'} className="w-10 h-10 sm:w-12 sm:h-12 object-cover relative z-10 drop-shadow-md pointer-events-none" alt="Pet Rescue" />
              </div>
              <div className="text-[9px] sm:text-[10px] font-mono font-bold bg-black/80 px-1.5 py-0.5 rounded text-blue-300 mt-1 whitespace-nowrap border border-blue-500/30">Nhấn giữ (800ms)</div>
              <div className="text-[8px] text-slate-400 mt-0.5">Miễn: <strong className="text-white">{droneFreeCount}</strong> | <strong className="text-amber-400">500🪙</strong></div>
