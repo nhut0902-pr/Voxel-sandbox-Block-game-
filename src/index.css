@@ -936,4 +936,83 @@ input:focus, select:focus {
     border-radius: 22px !important;
     font-size: 8px !important;
   }
+  
+  /* Compact Hotbar for older / narrower mobile screens */
+  .hotbar {
+    max-width: 95vw !important;
+    padding: 3px !important;
+    gap: 3px !important;
+    border-radius: 8px !important;
+    bottom: calc(8px + max(env(safe-area-inset-bottom), 0px)) !important;
+  }
+  .slot {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 6px !important;
+  }
+  .slot .bi {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 12px !important;
+  }
+  .slot .cn {
+    font-size: 7px !important;
+    bottom: 0.5px !important;
+    right: 1.5px !important;
+  }
+  .slot .lb {
+    display: none !important; /* Hide slot hovering text titles as it blocks mobile combat view */
+  }
+}
+
+/* Portrait vs Landscape Layout Adjustments for Older Devices */
+@media (max-height: 500px) {
+  /* Ultra-cozy height settings for Horizontal Play */
+  .mc {
+    padding: 12px !important;
+    margin: 4px auto !important;
+  }
+  .ip, .shp {
+    max-height: 82vh !important;
+    padding: 10px !important;
+  }
+  /* Offset controls upwards to prevent thumb cramping */
+  #joyWrap {
+    bottom: calc(52px + max(env(safe-area-inset-bottom), 0px)) !important;
+  }
+  #actBtns {
+    bottom: calc(52px + max(env(safe-area-inset-bottom), 0px)) !important;
+  }
+  #bpRow {
+    bottom: calc(48px + max(env(safe-area-inset-bottom), 0px)) !important;
+    gap: 6px !important;
+  }
+  .hotbar {
+    bottom: calc(6px + max(env(safe-area-inset-bottom), 0px)) !important;
+    padding: 2px !important;
+  }
+  /* Compress action buttons in short viewport landscape heights */
+  .ab {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 20px !important;
+  }
+}
+
+@media (orientation: portrait) {
+  /* Tweak indicators so they stack elegantly under Vertical Play */
+  #timePill {
+    top: max(env(safe-area-inset-top), 6px) !important;
+    transform: translateX(-50%) scale(0.92) !important;
+  }
+  #goldPill {
+    top: max(calc(env(safe-area-inset-top) + 38px), 44px) !important;
+    transform: scale(0.9) !important;
+    right: 4px !important;
+  }
+  #keysPill {
+    top: max(calc(env(safe-area-inset-top) + 38px), 44px) !important;
+    transform: scale(0.9) !important;
+    right: 68px !important;
+  }
 }

@@ -24,7 +24,7 @@ import { voiceManager } from '../systems/VoiceChat';
 import { audioSystem } from '../systems/audioSystem';
 
 /* ─── Types & Interfaces ─── */
-interface GameOptions {
+export interface GameOptions {
   name: string;
   seed: string;
   mode: 'creative' | 'survival' | 'adventure' | 'treasure';
@@ -35,6 +35,8 @@ interface GameOptions {
   skinColor: string;
   shirtColor: string;
   pantsColor: string;
+  avatarSkin: 'robot_soldier' | 'castle_char' | 'zombie_shambler';
+  companionPet: 'none' | 'labrador' | 'poodle' | 'robot_drone';
 }
 
 interface CraftingRecipe {
@@ -150,28 +152,52 @@ const CRAFTING_RECIPES: CraftingRecipe[] = [
     ingredients: [
       { id: '8', type: 'block', name: 'Tuyết', req: 4 }
     ]
+  },
+  {
+    resultId: 'tesla',
+    resultType: 'item',
+    resultName: 'Súng Tesla Sấm Sét',
+    resultEmoji: '⚡🔫',
+    count: 1,
+    ingredients: [
+      { id: '14', type: 'block', name: 'Quặng Vàng', req: 5 },
+      { id: '11', type: 'block', name: 'Hắc Diện Thạch', req: 3 },
+      { id: '15', type: 'block', name: 'Kim Cương', req: 2 }
+    ]
+  },
+  {
+    resultId: 'doom',
+    resultType: 'item',
+    resultName: 'Rìu Diệt Vong Thần Thoại',
+    resultEmoji: '🪓🔥',
+    count: 1,
+    ingredients: [
+      { id: '11', type: 'block', name: 'Hắc Diện Thạch', req: 5 },
+      { id: '15', type: 'block', name: 'Kim Cương', req: 4 }
+    ]
+  },
+  {
+    resultId: 'plat_shield',
+    resultType: 'item',
+    resultName: 'Khiên Vệ Thần Thượng Cổ',
+    resultEmoji: '🛡️✨',
+    count: 1,
+    ingredients: [
+      { id: '14', type: 'block', name: 'Quặng Vàng', req: 6 },
+      { id: '10', type: 'block', name: 'Mảnh Kính', req: 4 }
+    ]
   }
 ];
 
 interface VoxelGameProps {
+  options: GameOptions;
   onBackToLanding?: () => void;
 }
 
-export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
+export default function VoxelGame({ options, onBackToLanding }: VoxelGameProps) {
   /* ─── UI Router states ─── */
   const [isPlaying, setIsPlaying] = useState(false);
-  const [opts, setOpts] = useState<GameOptions>({
-    name: 'Steve',
-    seed: 'voxelverse-2026',
-    mode: 'treasure',
-    difficulty: 'normal',
-    biome: 'plains',
-    botCount: '3',
-    room: 'lobby',
-    skinColor: '#dbcca0',
-    shirtColor: '#3b82f6',
-    pantsColor: '#1d4ed8'
-  });
+  const [opts, setOpts] = useState<GameOptions>(options);
 
   const optsRef = useRef(opts);
   useEffect(() => {
@@ -224,12 +250,60 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const [flashlightActive, setFlashlightActive] = useState(false);
   const [proximityWarning, setProximityWarning] = useState<{ name: string; dist: number; type: 'key' | 'chest' } | null>(null);
   const [showSOSModal, setShowSOSModal] = useState(false);
+  const [sosFreeCount, setSosFreeCount] = useState(2);
+  const [droneFreeCount, setDroneFreeCount] = useState(2);
+  const [droneActive, setDroneActive] = useState(false);
   const [invincibleSeconds, setInvincibleSeconds] = useState(0);
   const [teammates, setTeammates] = useState<{ id: string; name: string; dist: number; screenX?: number; screenY?: number; onScreen: boolean; angle: number }[]>([]);
   const [speakingPeers, setSpeakingPeers] = useState<string[]>([]);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [roomAction, setRoomAction] = useState<'create' | 'join'>('create');
+
+  /* ─── Premium Features states ─── */
+  const [weather, setWeather] = useState<'clear' | 'rain' | 'fog' | 'eclipse'>('clear');
+  const [weatherTimer, setWeatherTimer] = useState(120);
+  const weatherRef = useRef<'clear' | 'rain' | 'fog' | 'eclipse'>('clear');
+
+  const [stnMinedProgress, setStnMinedProgress] = useState(0);
+  const [zmbKilledProgress, setZmbKilledProgress] = useState(0);
+  const [blkPlacedProgress, setBlkPlacedProgress] = useState(0);
+  const [itemCraftedProgress, setItemCraftedProgress] = useState(0);
+
+  const [questStnMinedClaimed, setQuestStnMinedClaimed] = useState(false);
+  const [questZmbKilledClaimed, setQuestZmbKilledClaimed] = useState(false);
+  const [questBlkPlacedClaimed, setQuestBlkPlacedClaimed] = useState(false);
+  const [questItemCraftedClaimed, setQuestItemCraftedClaimed] = useState(false);
+
+  const [showQuestsPanel, setShowQuestsPanel] = useState(true);
+
+  /* ─── Responsive & Performance Mobile Optimizations ─── */
+  const [pixelScaleMode, setPixelScaleMode] = useState<'high' | 'low'>('high');
+  const [minimapVisibleStyle, setMinimapVisibleStyle] = useState<'compact' | 'expanded' | 'hidden'>('compact');
+
+  const pixelScaleModeRef = useRef(pixelScaleMode);
+  const minimapStyleRef = useRef(minimapVisibleStyle);
+
+  useEffect(() => {
+    pixelScaleModeRef.current = pixelScaleMode;
+  }, [pixelScaleMode]);
+
+  useEffect(() => {
+    minimapStyleRef.current = minimapVisibleStyle;
+  }, [minimapVisibleStyle]);
+
+  // Dynamic pixel scale updater (for instant performance boosts on cheap/old devices)
+  useEffect(() => {
+    if (rendererRef.current && isPlaying) {
+      if (pixelScaleMode === 'low') {
+        rendererRef.current.setPixelRatio(0.6); // Fast 3D rendering scale
+        triggerToast('⚡ Đã chuyển sang chế độ Hiệu năng Cao (Mượt)!');
+      } else {
+        rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        triggerToast('✨ Đã bật Chế độ Sắc nét!');
+      }
+    }
+  }, [pixelScaleMode, isPlaying]);
 
   /* ─── Fullscreen toggle utility ─── */
   const toggleFullscreen = () => {
@@ -323,6 +397,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
   const flashlightRef = useRef<THREE.SpotLight | null>(null);
   const flashlightActiveRef = useRef<boolean>(false);
   const radarBeepTimer = useRef<number>(0);
+  const petMeshRef = useRef<THREE.Group | null>(null);
   
   // Dynamic parameters
   const lastTimeRef = useRef<number>(0);
@@ -397,6 +472,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     addBagItem(recipe.resultId, recipe.count);
     synth.playPlace();
     triggerToast(`🎉 Chế tạo thành công ${recipe.count}x ${recipe.resultEmoji} ${recipe.resultName}!`);
+    setItemCraftedProgress(prev => Math.min(1, prev + 1));
   };
 
   /* ─── Auto-Saver ─── */
@@ -469,7 +545,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       antialias: false,
       powerPreference: 'high-performance'
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, Dev.tier() === 'low' ? 1 : 1.5));
+    renderer.setPixelRatio(pixelScaleMode === 'low' ? 0.6 : Math.min(window.devicePixelRatio, Dev.tier() === 'low' ? 1 : 1.5));
     renderer.setSize(window.innerWidth, window.innerHeight);
     rendererRef.current = renderer;
 
@@ -576,43 +652,56 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
     const remotePlayers = new Map<string, THREE.Group>();
 
-    const createPlayerMesh = (name: string, skinColor = '#dbcca0', shirtColor = '#3b82f6', pantsColor = '#1d4ed8'): THREE.Group => {
+    const createPetMesh = (type: string): THREE.Group | undefined => {
+      if (type === 'none') return undefined;
+      const group = new THREE.Group();
+      
+      const textureLoader = new THREE.TextureLoader();
+      let textureUrl = '';
+      
+      if (type === 'labrador' || type === 'loyal_dog') {
+        textureUrl = '/dog-labrador.webp.png';
+      } else if (type === 'poodle' || type === 'cute_poodle') {
+        textureUrl = '/dog-poodle.webp.png';
+      } else if (type === 'robot_drone' || type === 'rescue_drone' || type === 'steel_robot') {
+        textureUrl = '/robot-drone-voxel.webp';
+      }
+
+      if (textureUrl) {
+         const map = textureLoader.load(textureUrl);
+         map.colorSpace = THREE.SRGBColorSpace;
+         const mat = new THREE.SpriteMaterial({ map: map, transparent: true });
+         const sprite = new THREE.Sprite(mat);
+         sprite.scale.set(1.5, 1.5, 1.5);
+         sprite.position.y = 0.75;
+         group.add(sprite);
+      }
+      
+      return group;
+    };
+
+    const createPlayerMesh = (name: string, skinColor = '#dbcca0', shirtColor = '#3b82f6', pantsColor = '#1d4ed8', avatarSkin?: string): THREE.Group => {
       const group = new THREE.Group();
       group.name = name;
 
-      // Simple box head (steve / custom character)
-      const headMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor) });
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
-      head.position.y = 1.45;
-      group.add(head);
+      const textureLoader = new THREE.TextureLoader();
+      let textureUrl = '';
+      
+      if (avatarSkin === 'castle_char') {
+        textureUrl = '/voxel-castle-character-a.webp';
+      } else {
+        textureUrl = '/robot-soldier-voxel.webp'; // Default to robot_soldier
+      }
 
-      // Body mesh
-      const bodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(shirtColor) }); // shirt
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 0.35), bodyMat);
-      body.position.y = 0.825;
-      group.add(body);
-
-      // Left leg
-      const legMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(pantsColor) }); // pants
-      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.45, 0.22), legMat);
-      leftLeg.position.set(-0.15, 0.225, 0);
-      group.add(leftLeg);
-
-      // Right leg
-      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.45, 0.22), legMat);
-      rightLeg.position.set(0.15, 0.225, 0);
-      group.add(rightLeg);
-
-      // Left arm
-      const armMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor) });
-      const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.6, 0.18), armMat);
-      leftArm.position.set(-0.35, 0.9, 0);
-      group.add(leftArm);
-
-      // Right arm
-      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.6, 0.18), armMat);
-      rightArm.position.set(0.35, 0.9, 0);
-      group.add(rightArm);
+      if (textureUrl) {
+         const map = textureLoader.load(textureUrl);
+         map.colorSpace = THREE.SRGBColorSpace;
+         const mat = new THREE.SpriteMaterial({ map: map, transparent: true });
+         const sprite = new THREE.Sprite(mat);
+         sprite.scale.set(1.8, 1.8, 1.8);
+         sprite.position.y = 0.9;
+         group.add(sprite);
+      }
 
       // Floaty name tag sprite
       const canvas = document.createElement('canvas');
@@ -660,7 +749,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
       list.forEach((p: any) => {
         if (p.id !== socketService.socket?.id) {
-          const m = createPlayerMesh(p.name, p.skinColor, p.shirtColor, p.pantsColor);
+          const m = createPlayerMesh(p.name, p.skinColor, p.shirtColor, p.pantsColor, p.avatarSkin);
           m.position.set(p.x, p.y, p.z);
           m.rotation.y = p.rotY || 0;
           scene.add(m);
@@ -672,7 +761,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
     // Listen to players joiner
     socketService.on('player:joined', (p) => {
       if (p.id !== socketService.socket?.id && !remotePlayers.has(p.id)) {
-        const m = createPlayerMesh(p.name, p.skinColor, p.shirtColor, p.pantsColor);
+        const m = createPlayerMesh(p.name, p.skinColor, p.shirtColor, p.pantsColor, p.avatarSkin);
         m.position.set(p.x, p.y, p.z);
         m.rotation.y = p.rotY || 0;
         scene.add(m);
@@ -795,6 +884,30 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       } else {
         setPing(null);
       }
+
+      // Premium Weather countdown ticker & dynamic cyclic updates (runs every 2s)
+      setWeatherTimer((prev) => {
+        const nextVal = prev - 2;
+        if (nextVal <= 0) {
+          const nextWeatherMap: Record<string, 'clear' | 'rain' | 'fog' | 'eclipse'> = {
+            clear: 'rain',
+            rain: 'fog',
+            fog: 'eclipse',
+            eclipse: 'clear'
+          };
+          const nextWeather = nextWeatherMap[weatherRef.current] || 'clear';
+          weatherRef.current = nextWeather;
+          setWeather(nextWeather);
+          triggerToast(`🌦️ Thời tiết bỗng đổi: ${
+            nextWeather === 'clear' ? 'Trời Quang Đãng ☀️' :
+            nextWeather === 'rain' ? 'Mưa Giông Bão 🌧️' :
+            nextWeather === 'fog' ? 'Sương Mù Ẩm Ướt 🌫️' : 'Mặt Trăng Máu 🌑 (Yêu ma trỗi dậy!)'
+          }`);
+          synth.playPlace();
+          return 120; // 2 minutes next weather
+        }
+        return nextVal;
+      });
     }, 2000);
 
     // 4. Cursor wireframe indicator
@@ -997,7 +1110,13 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       camRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(window.innerWidth, window.innerHeight);
     };
+    const handleOrientation = () => {
+      setTimeout(handleResize, 100);
+      setTimeout(handleResize, 350);
+      setTimeout(handleResize, 700);
+    };
     window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientation);
 
     // Initial render setup
     cmgr.upd(player.pos.x, player.pos.z, Dev.rd());
@@ -1184,6 +1303,19 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 pInst.kills++;
                 pInst.gold += targetMob.cfg.gold;
                 setGoldCount(pInst.gold);
+
+                if (targetMob.cfg.hos) {
+                  setZmbKilledProgress(prev => Math.min(3, prev + 1));
+                }
+
+                if (targetMob.type === 'mutant_zombie') {
+                  triggerToast('🏆 BOSS HUỶ DIỆT BẠI TRẬN! Nhận thêm 1 Chìa Khóa Vàng (🔑) Thượng Cổ!');
+                  setBagItems(prev => ({
+                    ...prev,
+                    key: (prev['key'] || 0) + 1
+                  }));
+                }
+
                 if (pInst.addXP(targetMob.cfg.xp)) {
                   setPlayerLevel(pInst.lv);
                   setMhp(pInst.mhp);
@@ -1308,6 +1440,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                     next[String(bId)] = (next[String(bId)] || 0) + 1;
                     return next;
                   });
+                  if (bId === 3) {
+                    setStnMinedProgress(prev => Math.min(15, prev + 1));
+                  }
                 }
                 
                 if (bId === 14) {
@@ -1339,6 +1474,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 cInst.wSet(nx, ny, nz, currentSelectedSlot.id);
                 cInst.upd(pInst.pos.x, pInst.pos.z, Dev.rd());
                 triggerToast('Đặt khối: ' + (BLK[currentSelectedSlot.id]?.n || 'khối') + ' ✅');
+                setBlkPlacedProgress(prev => Math.min(10, prev + 1));
 
                 // Sync block placement to other players
                 socketService.emit('block:change', { x: nx, y: ny, z: nz, blockId: currentSelectedSlot.id });
@@ -1349,6 +1485,33 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
         // Atmosphere update (passing player position to drift/wrap clouds)
         dInst.upd(dt, pInst.pos, !!socketService.socket?.connected);
+
+        // --- WEATHER ENVIRONMENT OVERRIDES ---
+        const activeWeather = weatherRef.current;
+        if (activeWeather === 'rain') {
+          const rainSkyColor = new THREE.Color(0x353942);
+          scene.background = rainSkyColor;
+          if (scene.fog && scene.fog instanceof THREE.Fog) {
+            scene.fog.color.copy(rainSkyColor);
+            scene.fog.far = Math.min(scene.fog.far, 65);
+          }
+        } else if (activeWeather === 'fog') {
+          const fogSkyColor = new THREE.Color(0xcbcbcb);
+          scene.background = fogSkyColor;
+          if (scene.fog && scene.fog instanceof THREE.Fog) {
+            scene.fog.color.copy(fogSkyColor);
+            scene.fog.near = 4;
+            scene.fog.far = Math.min(scene.fog.far, 40);
+          }
+        } else if (activeWeather === 'eclipse') {
+          const eclipseSkyColor = new THREE.Color(0x380505);
+          scene.background = eclipseSkyColor;
+          if (scene.fog && scene.fog instanceof THREE.Fog) {
+            scene.fog.color.copy(eclipseSkyColor);
+            scene.fog.far = Math.min(scene.fog.far, 80);
+          }
+        }
+
         setTimeLabel(dInst.lbl());
         setTimePercent(dInst.t * 100);
         
@@ -1364,6 +1527,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           prevWasNightForFlashlight.current = false;
         }
 
+        // Update flashlight position
         const fLightObj = flashlightRef.current;
         if (fLightObj && camRef.current) {
           if (flashlightActiveRef.current) {
@@ -1377,6 +1541,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           } else {
             fLightObj.visible = false;
           }
+        }
+
+        // Companion Pet logic
+        if (opts.companionPet && opts.companionPet !== 'none' && !petMeshRef.current) {
+            const petMesh = createPetMesh(opts.companionPet);
+            if (petMesh) {
+                petMeshRef.current = petMesh;
+                scene.add(petMesh);
+            }
+        }
+        if (petMeshRef.current && pInst) {
+            // Simple follow logic: move mesh towards player position with smoothing
+            const targetPos = pInst.pos.clone().add(new THREE.Vector3(1, 0, 1));
+            petMeshRef.current.position.lerp(targetPos, 0.1);
         }
 
         // Radar proximity warning alerts for Key Shrines / ancient chest (mode: treasure, survival, adventure)
@@ -1461,7 +1639,12 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             const hostilesList = ['zombie', 'skeleton', 'creeper', 'wolf'];
             
             for (let b = 0; b < spawnBatchCount; b++) {
-              const chosenType = hostilesList[~~(Math.random() * hostilesList.length)];
+              const isEclipse = weatherRef.current === 'eclipse';
+              const bossChance = isEclipse ? 0.25 : 0.08;
+              let chosenType = hostilesList[~~(Math.random() * hostilesList.length)];
+              if (Math.random() < bossChance) {
+                chosenType = 'mutant_zombie';
+              }
               
               // 15% chance to surprise spawn right near the player
               const isSurprise = Math.random() < 0.15;
@@ -1472,6 +1655,10 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               const z = pInst.pos.z + Math.sin(a) * r;
               
               const newMob = new Entity(chosenType, x, wgen.h(~~x, ~~z) + 2, z, scene);
+              
+              if (chosenType === 'mutant_zombie') {
+                triggerToast('🚨 CẢNH BÁO: BOSS ZOMBIE ĐỘT BIẾN HUỶ DIỆT ĐANG TIẾP CẬN BẠN!');
+              }
               
               // Infinite progressive scaling of HP, Speed & gold reward stats
               if (wave > 1) {
@@ -1608,17 +1795,21 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         }
 
         // Draw Minimap (every few frames for performance)
-        if (minimapCanvasRef.current && fpsCnt.current % 5 === 0) {
+        const currentMiniStyle = minimapStyleRef.current;
+        const currentPerfMode = pixelScaleModeRef.current;
+        if (minimapCanvasRef.current && fpsCnt.current % 5 === 0 && currentMiniStyle !== 'hidden') {
           const ctx = minimapCanvasRef.current.getContext('2d', { alpha: false });
           if (ctx) {
             const size = 100;
-            ctx.fillStyle = '#1e293b'; // background
+            ctx.fillStyle = '#0f172a'; // modern deep slate background
             ctx.fillRect(0, 0, size, size);
             
             const px = pInst.pos.x;
             const pz = pInst.pos.z;
             const py = pInst.pos.y;
-            const r = 25; // 25 blocks radius
+            
+            // DYNAMIC RADIUS: If compact/normal map or low-spec performance mode, check smaller radius to run up to 300% faster
+            const r = (currentMiniStyle === 'compact' || currentPerfMode === 'low') ? 14 : 25;
             const scale = size / (r * 2);
 
             ctx.save();
@@ -1627,13 +1818,18 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             ctx.rotate(pInst.yaw);
             ctx.translate(-size / 2, -size / 2);
 
+            // DYNAMIC SCANNING THRESHOLD:
+            // High performance mode searches fewer vertical slices to eliminate micro-stuttering on old devices
+            const scanDepth = currentPerfMode === 'low' ? 7 : 15;
+            const scanHeightOffset = currentPerfMode === 'low' ? 1 : 2;
+
             for (let bx = Math.floor(px - r); bx <= Math.ceil(px + r); bx++) {
               for (let bz = Math.floor(pz - r); bz <= Math.ceil(pz + r); bz++) {
                 const dy = Math.floor(py);
                 let highest = 0;
                 
                 // Fast search for highest block near player Y level
-                for (let yy = dy + 2; yy >= dy - 15; yy--) {
+                for (let yy = dy + scanHeightOffset; yy >= dy - scanDepth; yy--) {
                   const b = cInst.wGet(bx, yy, bz);
                   if (b !== 0) { highest = b; break; }
                 }
@@ -1641,19 +1837,19 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
                 if (highest === 0) {
                   // Fallback to WGen height estimation
                   const genH = wgen.h(bx, bz);
-                  if (genH < dy + 2) highest = 1; // default to grass
+                  if (genH < dy + scanHeightOffset) highest = 1; // default to grass
                 }
 
                 if (highest !== 0) {
                   // Determine block color purely for minimap visual
-                  let c = '#4caf50'; // grass
-                  if (highest === 3 || highest === 4) c = '#78909c'; // stone
-                  else if (highest === 2) c = '#795548'; // dirt
-                  else if (highest === 6 || highest === 7) c = '#2e7d32'; // leaves/wood
-                  else if (highest === 8) c = '#ffffff'; // snow
-                  else if (highest === 9) c = '#ff9800'; // sand
-                  else if (highest === 11 || highest === 14 || highest === 15) c = '#0ea5e9'; // ores
-                  else if (highest === 5) c = '#e2e8f0'; // bricks
+                  let c = '#10b981'; // vibrant neon green for grass
+                  if (highest === 3 || highest === 4) c = '#64748b'; // stone slate
+                  else if (highest === 2) c = '#78350f'; // rich dirt brown
+                  else if (highest === 6 || highest === 7) c = '#047857'; // emerald forest
+                  else if (highest === 8) c = '#f8fafc'; // beautiful snow white
+                  else if (highest === 9) c = '#eab308'; // bright golden sand
+                  else if (highest === 11 || highest === 14 || highest === 15) c = '#0ea5e9'; // glowing sky sapphire ore
+                  else if (highest === 5) c = '#cbd5e1'; // premium light brick slate
                   
                   ctx.fillStyle = c;
                   const rx = (bx - px + r) * scale;
@@ -1847,6 +2043,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           elem.closest('.pill') ||
           elem.closest('#invBtn2') ||
           elem.closest('.chat-box') ||
+          elem.closest('#sos-modal') ||
+          elem.closest('#treasure-guide') ||
+          elem.closest('#settings-modal') ||
+          elem.closest('#dead') ||
+          elem.closest('#victory-screen') ||
           elem.tagName === 'BUTTON' ||
           elem.tagName === 'INPUT' ||
           elem.tagName === 'SELECT'
@@ -1926,6 +2127,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
           elem.closest('.pill') ||
           elem.closest('#invBtn2') ||
           elem.closest('.chat-box') ||
+          elem.closest('#sos-modal') ||
+          elem.closest('#treasure-guide') ||
+          elem.closest('#settings-modal') ||
+          elem.closest('#dead') ||
+          elem.closest('#victory-screen') ||
           elem.tagName === 'BUTTON' ||
           elem.tagName === 'INPUT' ||
           elem.tagName === 'SELECT'
@@ -1988,6 +2194,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       window.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('pointerlockchange', handleLockChange);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientation);
       window.removeEventListener('wheel', handleWheel);
       
       window.removeEventListener('touchstart', handleNativeTouchStart);
@@ -2136,6 +2343,202 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         }`}
       >
         <canvas ref={canvasRef} className="w-full h-full block outline-none" />
+
+        {/* 🌦️ Weather Full-Screen Atmospheric Overlays */}
+        {isPlaying && weather === 'rain' && (
+          <div className="absolute inset-0 pointer-events-none z-[2] bg-blue-950/15 mix-blend-color-burn animate-pulse" style={{
+            backgroundImage: `repeating-linear-gradient(170deg, rgba(255,255,255,0) 0px, rgba(230,240,255,0.06) 1px, rgba(100,100,150,0) 2px, rgba(0,0,0,0) 80px)`,
+            backgroundSize: '300px 300px',
+          }} />
+        )}
+        {isPlaying && weather === 'fog' && (
+          <div className="absolute inset-0 pointer-events-none z-[2] bg-slate-200/10 backdrop-blur-[0.5px] transition-all duration-1000" />
+        )}
+        {isPlaying && weather === 'eclipse' && (
+          <div className="absolute inset-0 pointer-events-none z-[2] bg-red-950/20 mix-blend-color-burn animate-pulse transition-all duration-1500" style={{
+            boxShadow: 'inset 0 0 100px rgba(185, 28, 28, 0.25)'
+          }} />
+        )}
+
+        {/* 📜 Survival Daily Quests Panel (Glassmorphic, collapsible) */}
+        {isPlaying && (
+          <div className="absolute right-4 top-24 pointer-events-auto z-[25] flex flex-col items-end select-none">
+            {/* Collapse/Expand Toggle Button */}
+            <button
+              onClick={() => {
+                setShowQuestsPanel(!showQuestsPanel);
+                synth.playCollect();
+              }}
+              className="flex items-center gap-1.5 bg-slate-900/95 border border-slate-700/60 hover:bg-slate-800 text-slate-300 hover:text-white font-bold py-1.5 px-3 rounded-xl shadow-lg transition-all text-xs cursor-pointer active:scale-95"
+            >
+              <span>📜</span>
+              <span>Nhiệm vụ Sinh tồn Daily</span>
+              <span className="font-mono text-[10px] text-slate-400">({showQuestsPanel ? 'Ẩn' : 'Hiện'})</span>
+            </button>
+
+            {showQuestsPanel && (
+              <div className="mt-2 w-72 bg-slate-950/90 border border-slate-800 rounded-2xl p-4 shadow-2xl backdrop-blur-md text-xs flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-black text-[11px] tracking-wider uppercase text-emerald-400">🎯 HOẠT ĐỘNG THƯỜNG NHẬT</span>
+                  <span className="font-mono text-[10px] text-slate-500">Reset sau 24h</span>
+                </div>
+
+                {/* Quest 1: Mine 15 Stones */}
+                <div className="flex flex-col gap-1.5 p-2 bg-slate-900/40 border border-slate-800/60 rounded-xl text-left">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-semibold ${stnMinedProgress >= 15 ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                      ⛏️ Khai thác 15 khối Đá Cuội
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 font-bold">{stnMinedProgress}/15</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${Math.min(100, (stnMinedProgress / 15) * 100)}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                    <span>Thưởng: <span className="text-amber-400 font-bold">120🪙</span></span>
+                    {stnMinedProgress >= 15 ? (
+                      questStnMinedClaimed ? (
+                        <span className="text-emerald-500 font-black">✓ ĐÃ NHẬN</span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setQuestStnMinedClaimed(true);
+                            if (playerRef.current) {
+                              playerRef.current.gold += 120;
+                              setGoldCount(playerRef.current.gold);
+                            }
+                            triggerToast('🎁 QUÀ NHIỆM VỤ: +120🪙 đã được thêm vào túi!');
+                            synth.playCollect();
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-2 py-0.5 rounded-md cursor-pointer active:scale-95"
+                        >
+                          NHẬN THƯỞNG
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-slate-550">Chưa xong</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quest 2: Slay 3 Hostiles */}
+                <div className="flex flex-col gap-1.5 p-2 bg-slate-900/40 border border-slate-800/60 rounded-xl text-left">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-semibold ${zmbKilledProgress >= 3 ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                      ⚔️ Tiêu diệt 3 quái thú dị chủng
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 font-bold">{zmbKilledProgress}/3</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${Math.min(100, (zmbKilledProgress / 3) * 100)}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                    <span>Thưởng: <span className="text-amber-400 font-bold">180🪙</span></span>
+                    {zmbKilledProgress >= 3 ? (
+                      questZmbKilledClaimed ? (
+                        <span className="text-emerald-500 font-black">✓ ĐÃ NHẬN</span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setQuestZmbKilledClaimed(true);
+                            if (playerRef.current) {
+                              playerRef.current.gold += 180;
+                              setGoldCount(playerRef.current.gold);
+                            }
+                            triggerToast('🎁 QUÀ NHIỆM VỤ: +180🪙 đã được thêm vào túi!');
+                            synth.playCollect();
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-2 py-0.5 rounded-md cursor-pointer active:scale-95"
+                        >
+                          NHẬN THƯỞNG
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-slate-550">Chưa xong</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quest 3: Place 10 Blocks */}
+                <div className="flex flex-col gap-1.5 p-2 bg-slate-900/40 border border-slate-800/60 rounded-xl text-left">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-semibold ${blkPlacedProgress >= 10 ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                      🧱 Đặt thành công 10 khối xây dựng
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 font-bold">{blkPlacedProgress}/10</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${Math.min(100, (blkPlacedProgress / 10) * 100)}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                    <span>Thưởng: <span className="text-amber-400 font-bold">100🪙</span></span>
+                    {blkPlacedProgress >= 10 ? (
+                      questBlkPlacedClaimed ? (
+                        <span className="text-emerald-500 font-black">✓ ĐÃ NHẬN</span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setQuestBlkPlacedClaimed(true);
+                            if (playerRef.current) {
+                              playerRef.current.gold += 100;
+                              setGoldCount(playerRef.current.gold);
+                            }
+                            triggerToast('🎁 QUÀ NHIỆM VỤ: +100🪙 đã được thêm vào túi!');
+                            synth.playCollect();
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-2 py-0.5 rounded-md cursor-pointer active:scale-95"
+                        >
+                          NHẬN THƯỞNG
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-slate-550">Chưa xong</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quest 4: Craft 1 Item */}
+                <div className="flex flex-col gap-1.5 p-2 bg-slate-900/40 border border-slate-800/60 rounded-xl text-left">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-semibold ${itemCraftedProgress >= 1 ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                      🧪 Chế tạo thành công 1 thành phẩm
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 font-bold">{itemCraftedProgress}/1</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${Math.min(100, (itemCraftedProgress / 1) * 100)}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                    <span>Thưởng: <span className="text-amber-400 font-bold">150🪙</span></span>
+                    {itemCraftedProgress >= 1 ? (
+                      questItemCraftedClaimed ? (
+                        <span className="text-emerald-500 font-black">✓ ĐÃ NHẬN</span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setQuestItemCraftedClaimed(true);
+                            if (playerRef.current) {
+                              playerRef.current.gold += 150;
+                              setGoldCount(playerRef.current.gold);
+                            }
+                            triggerToast('🎁 QUÀ NHIỆM VỤ: +150🪙 đã được thêm vào túi!');
+                            synth.playCollect();
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-2 py-0.5 rounded-md cursor-pointer active:scale-95"
+                        >
+                          NHẬN THƯỞNG
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-slate-550">Chưa xong</span>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ─── 2. MAIN MENU OVERLAY ─── */}
@@ -2664,6 +3067,20 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               <div className="pill select-none font-mono font-medium hidden sm:flex">
                 📍 {coordsText}
               </div>
+              <button
+                onClick={() => {
+                  setPixelScaleMode(prev => prev === 'high' ? 'low' : 'high');
+                  synth.playPlace();
+                }}
+                className={`pill select-none font-bold active:scale-95 cursor-pointer pointer-events-auto transition-all ${
+                  pixelScaleMode === 'low'
+                    ? 'border-emerald-500 bg-emerald-950/60 text-emerald-400 animate-pulse'
+                    : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                }`}
+                title="Chuyển đổi Sắc nét vs Hiệu năng (Mượt cho máy cũ)"
+              >
+                {pixelScaleMode === 'low' ? '⚡ MỢT (OPTIMIZED)' : '✨ SẮC NÉT'}
+              </button>
             </div>
             
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2908,6 +3325,38 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             🪙 <span id="goldAmt">{goldCount}</span>
           </div>
 
+          {/* Dynamic Weather System Pill */}
+          <div
+            id="weatherPill"
+            className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/60 rounded-full py-1.5 px-3 select-none hover:bg-slate-800 transition-colors pointer-events-auto cursor-pointer text-xs"
+            onClick={() => {
+              triggerToast(`🌦️ Thời tiết: ${
+                weather === 'clear' ? 'Trời Quang Đãng ☀️' :
+                weather === 'rain' ? 'Mưa Bão Sấm Chớp 🌧️' :
+                weather === 'fog' ? 'Sương Mù Dày Đặc 🌫️' : 'Mặt Trăng Máu Kỳ Bí 🌑 (Quái vật siêu khoẻ!)'
+              }. Đổi sau ${weatherTimer}s.`);
+              synth.playCollect();
+            }}
+          >
+            <span className="text-sm">
+              {weather === 'clear' ? '☀️' :
+               weather === 'rain' ? '🌧️' :
+               weather === 'fog' ? '🌫️' : '🌑' }
+            </span>
+            <span className="font-sans font-extrabold flex items-center gap-1 leading-none text-[10px] tracking-wider uppercase">
+              <span className={
+                weather === 'clear' ? 'text-amber-400' :
+                weather === 'rain' ? 'text-blue-400 font-black animate-pulse' :
+                weather === 'fog' ? 'text-slate-300' : 'text-red-500 font-black animate-pulse'
+              }>
+                {weather === 'clear' ? 'QUANG' :
+                 weather === 'rain' ? 'MƯA BÃO' :
+                 weather === 'fog' ? 'SƯƠNG MÙ' : 'TRĂNG MÁU'}
+              </span>
+              <span className="text-[9px] text-slate-500 font-mono font-normal">({weatherTimer}s)</span>
+            </span>
+          </div>
+
           {/* Game mode designation badge */}
           <span
             id="modeBadge"
@@ -2916,16 +3365,43 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             {currentBadge}
           </span>
           
-          {/* Circular Minimap Overlay */}
-          <div className="absolute top-16 left-4 z-10 w-28 h-28 rounded-full overflow-hidden border-2 border-slate-700/80 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-slate-900/60 backdrop-blur-sm opacity-80 hover:opacity-100 transition-opacity hidden sm:block">
-            <canvas ref={minimapCanvasRef} width={100} height={100} className="w-full h-full [image-rendering:pixelated]" />
-            <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-sm shadow-red-500/50"></div>
-            {/* Compass labels */}
-            <span className="absolute top-0.5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white/70 select-none">N</span>
-            <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white/70 select-none">S</span>
-            <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70 select-none">W</span>
-            <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70 select-none">E</span>
-          </div>
+          {/* Circular Minimap Overlay (Click to Cycle Style) */}
+          {minimapVisibleStyle !== 'hidden' && (
+            <div
+              className={`absolute top-16 left-2 sm:left-4 z-10 rounded-full overflow-hidden border-2 border-slate-700/80 shadow-[0_0_15px_rgba(0,0,0,0.5)] bg-slate-900/60 backdrop-blur-m opacity-90 hover:opacity-100 cursor-pointer transition-all ${
+                minimapVisibleStyle === 'compact' ? 'w-20 h-20' : 'w-32 h-32'
+              }`}
+              onClick={() => {
+                const nextStyle = minimapVisibleStyle === 'compact' ? 'expanded' : 'hidden';
+                setMinimapVisibleStyle(nextStyle);
+                triggerToast(nextStyle === 'expanded' ? '🗺️ Đã mở rộng bản đồ!' : '🗺️ Đã ẩn bản đồ (Tối ưu hóa hiệu năng!)');
+                synth.playCollect();
+              }}
+              title="Nhấp để thu phóng hoặc ẩn bản đồ"
+            >
+              <canvas ref={minimapCanvasRef} width={100} height={100} className="w-full h-full [image-rendering:pixelated]" />
+              <div className="absolute top-1/2 left-1/2 w-1.5 h-1.5 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-sm shadow-red-500/50"></div>
+              {/* Compass labels */}
+              <span className="absolute top-0.5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-white/70 select-none">N</span>
+              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-white/70 select-none">S</span>
+              <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/70 select-none">W</span>
+              <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-white/70 select-none">E</span>
+            </div>
+          )}
+
+          {/* Minimap Quick Reveal button if hidden */}
+          {minimapVisibleStyle === 'hidden' && (
+            <button
+              onClick={() => {
+                setMinimapVisibleStyle('compact');
+                triggerToast('🗺️ Hiện bản đồ (Dạng nhỏ)');
+                synth.playCollect();
+              }}
+              className="absolute top-16 left-2 sm:left-4 z-10 bg-slate-900/90 border border-slate-700/60 p-1.5 px-2.5 rounded-full text-[10px] font-extrabold text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer pointer-events-auto active:scale-95 transition-all shadow-md"
+            >
+              🗺️ HIỆN BẢN ĐỒ
+            </button>
+          )}
 
           {/* TEAMMATE RADAR DIRECTIONAL TRACKING HUD SYSTEM */}
           {teammates.map((peer) => {
@@ -3639,7 +4115,7 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
 
       {/* ─── TREASURE HUNT MODE FULL-SCREEN DETAILED GUIDE ─── */}
       {showTreasureGuide && (
-        <div className="absolute inset-0 z-[70] bg-black/95 flex items-center justify-center p-4 overflow-y-auto select-none animate-fade-in text-slate-200">
+        <div id="treasure-guide" className="absolute inset-0 z-[70] bg-black/95 flex items-center justify-center p-4 overflow-y-auto select-none animate-fade-in text-slate-200">
           <div className="max-w-xl w-full bg-slate-900 border-2 border-amber-500 rounded-3xl p-6 md:p-8 shadow-2xl relative">
             <div className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer text-xl font-bold font-mono" onClick={() => setShowTreasureGuide(false)}>✕</div>
             
@@ -3705,7 +4181,105 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
         </div>
       )}
 
-
+      {/* ─── DRONE SUPPORT HUD ─── */}
+      {isPlaying && (
+          <div 
+             id="drone-support-hud"
+             className="absolute left-3 top-32 lg:top-40 z-[50] flex flex-col items-center gap-1 active:scale-95 transition-transform select-none group"
+             onContextMenu={(e) => e.preventDefault()}
+             onPointerDown={() => {
+                 if (droneActive) return;
+                 const longPress = setTimeout(() => {
+                     // trigger drone support
+                     const activate = () => {
+                         setDroneActive(true);
+                         triggerToast('🛸 Đã có yêu cầu trợ giúp Drone! Drone vận chuyển đang vào vị trí...');
+                         synth.playCollect();
+                         
+                         if (sceneRef.current && playerRef.current) {
+                             const pInst = playerRef.current;
+                             const droneMat = new THREE.SpriteMaterial({ 
+                                map: new THREE.TextureLoader().load('/robot-drone-voxel.webp'), 
+                                transparent: true 
+                             });
+                             const drone = new THREE.Sprite(droneMat);
+                             drone.scale.set(4, 4, 4);
+                             drone.position.copy(pInst.pos).add(new THREE.Vector3(0, 40, 0));
+                             sceneRef.current.add(drone);
+                             
+                             const animInt = setInterval(() => {
+                                 if (!playerRef.current || !sceneRef.current) {
+                                     clearInterval(animInt);
+                                     return;
+                                 }
+                                 const tgt = playerRef.current.pos.clone().add(new THREE.Vector3(0, 2.5, 0));
+                                 drone.position.lerp(tgt, 0.08); // fly in
+                             
+                                 if (drone.position.distanceTo(tgt) < 1.5) {
+                                     clearInterval(animInt);
+                                     
+                                     // reached, drop item
+                                     setTimeout(() => {
+                                         triggerToast('🛸 Drone cứu trợ đã thả thành công Thùng Sinh Tồn Khẩn Cấp!');
+                                         synth.playPlace();
+                                         setBagItems(prev => {
+                                            const b = {...prev};
+                                            b['apple'] = (b['apple'] || 0) + 10;
+                                            b['bread'] = (b['bread'] || 0) + 5;
+                                            b['diamond_sword'] = 1;
+                                            return b;
+                                         });
+                                         if (playerRef.current) {
+                                             playerRef.current.hp = playerRef.current.mhp; // Full heal
+                                             playerRef.current.hunger = 100;
+                                             playerRef.current.invincibleShieldT = 10; // add some shield for safe respawn
+                                             setInvincibleSeconds(10);
+                                             setHp(playerRef.current.hp);
+                                             setHunger(playerRef.current.hunger);
+                                         }
+                                         
+                                         // fly away
+                                         const flyAway = setInterval(() => {
+                                              drone.position.y += 0.8;
+                                              if (drone.position.y > 60) {
+                                                  clearInterval(flyAway);
+                                                  sceneRef.current?.remove(drone);
+                                                  setDroneActive(false);
+                                              }
+                                         }, 50);
+                                     }, 1500); // hover for 1.5s
+                                 }
+                             }, 50);
+                         }
+                     };
+                     
+                     if (droneFreeCount > 0) {
+                         setDroneFreeCount(v => v - 1);
+                         activate();
+                     } else if (playerRef.current && playerRef.current.gold >= 500) {
+                         playerRef.current.gold -= 500;
+                         setGoldCount(playerRef.current.gold);
+                         activate();
+                     } else {
+                         triggerToast('❌ KHÔNG THỂ GỌI DRONE: Cần 500 Vàng do đã hết lượt miễn phí!');
+                         synth.playPlace();
+                     }
+                 }, 800); // 800ms hold
+                 
+                 const cancelPress = () => clearTimeout(longPress);
+                 document.addEventListener('pointerup', cancelPress, { once: true });
+                 document.addEventListener('pointerleave', cancelPress, { once: true });
+             }}
+          >
+             <div className="absolute -top-7 text-[9px] text-white font-bold bg-blue-600/80 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">GỌI DRONE CỨU TRỢ</div>
+             <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800/80 border-2 border-blue-500 rounded-full flex items-center justify-center overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.5)] cursor-pointer relative" style={{ backdropFilter: 'blur(4px)' }}>
+                 <div className="absolute inset-0 bg-blue-500/20 active:bg-blue-500/50 transition-colors pointer-events-none" />
+                 <img src={opts.companionPet === 'poodle' ? '/dog-poodle.webp.png' : '/dog-labrador.webp.png'} className="w-10 h-10 sm:w-12 sm:h-12 object-cover relative z-10 drop-shadow-md pointer-events-none" alt="Pet Rescue" />
+             </div>
+             <div className="text-[9px] sm:text-[10px] font-mono font-bold bg-black/80 px-1.5 py-0.5 rounded text-blue-300 mt-1 whitespace-nowrap border border-blue-500/30">Nhấn giữ (800ms)</div>
+             <div className="text-[8px] text-slate-400 mt-0.5">Miễn: <strong className="text-white">{droneFreeCount}</strong> | <strong className="text-amber-400">500🪙</strong></div>
+          </div>
+      )}
 
       {/* ─── SOS SHIELD VISUAL OVERLAY HALO ─── */}
       {isPlaying && invincibleSeconds > 0 && (
@@ -3718,8 +4292,25 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
       )}
 
       {/* ─── SOS EMERGENCY RECOVERY MODAL SELECTION SCREEN ─── */}
-      {isPlaying && showSOSModal && (
-        <div className="absolute inset-0 z-[75] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto select-none font-sans animate-fade-in text-slate-200">
+      {isPlaying && showSOSModal && (() => {
+        const handleSOSTrigger = (actionCallback: () => void) => {
+          const pInst = playerRef.current;
+          if (!pInst) return;
+          if (sosFreeCount > 0) {
+            setSosFreeCount(prev => prev - 1);
+            actionCallback();
+          } else if (pInst.gold >= 500) {
+            pInst.gold -= 500;
+            setGoldCount(pInst.gold);
+            actionCallback();
+          } else {
+            triggerToast('❌ KHÔNG THỂ GỌI SOS: Bạn đã hết lượt miễn phí và cần 500 Vàng để mua thêm!');
+            synth.playPlace();
+          }
+        };
+
+        return (
+        <div id="sos-modal" className="absolute inset-0 z-[75] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto select-none font-sans animate-fade-in text-slate-200">
           <div className="max-w-md w-full bg-slate-900 border-2 border-red-500 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
             {/* Ambient design gradients */}
             <div className="absolute -top-12 -right-12 w-32 h-32 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -3734,7 +4325,9 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               <span className="text-3xl animate-bounce">🚨</span>
               <div>
                 <h3 className="text-base md:text-lg font-black text-red-500 uppercase tracking-widest leading-none">HỆ THỐNG CỨU TRỢ SOS</h3>
-                <p className="text-[10px] text-slate-400 font-medium mt-1 leading-none">Chế độ Hỗ Trợ Độc Quyền cho Truy Tìm Kho Báu</p>
+                <p className="text-[10px] items-center gap-2 flex text-slate-400 font-medium mt-1 leading-none">
+                   Miễn phí: <strong className="text-white bg-red-500/30 px-1 py-0.5 rounded">{sosFreeCount} lần</strong> | Mua thêm: <strong className="text-amber-400">500🪙</strong>
+                </p>
               </div>
             </div>
 
@@ -3746,27 +4339,29 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               {/* Option 1: Instashield + supplies */}
               <button
                 onClick={() => {
-                  const pInst = playerRef.current;
-                  if (pInst) {
-                    pInst.hp = pInst.mhp; // Full HP
-                    pInst.hunger = 100; // Full hunger
-                    pInst.invincibleShieldT = 15; // 15 seconds shield
-                    setHp(pInst.hp);
-                    setHunger(pInst.hunger);
-                    setInvincibleSeconds(15);
-                    
-                    // Give bread and blocks
-                    setBagItems(prev => {
-                      const updated = { ...prev };
-                      updated['bread'] = (updated['bread'] || 0) + 12; // 12 emergency bread
-                      updated['5'] = (updated['5'] || 0) + 40; // 40 Bricks blocks to build safety pillars
-                      return updated;
-                    });
-                    
-                    triggerToast('🛡️ SOS: Đã kích hoạt 15 giây Hào Quang Vô Song & tiếp tế lương thực!');
-                    synth.playCollect();
-                    setShowSOSModal(false);
-                  }
+                  handleSOSTrigger(() => {
+                    const pInst = playerRef.current;
+                    if (pInst) {
+                      pInst.hp = pInst.mhp; // Full HP
+                      pInst.hunger = 100; // Full hunger
+                      pInst.invincibleShieldT = 15; // 15 seconds shield
+                      setHp(pInst.hp);
+                      setHunger(pInst.hunger);
+                      setInvincibleSeconds(15);
+                      
+                      // Give bread and blocks
+                      setBagItems(prev => {
+                        const updated = { ...prev };
+                        updated['bread'] = (updated['bread'] || 0) + 12; // 12 emergency bread
+                        updated['5'] = (updated['5'] || 0) + 40; // 40 Bricks blocks to build safety pillars
+                        return updated;
+                      });
+                      
+                      triggerToast('🛡️ SOS: Đã kích hoạt 15 giây Hào Quang Vô Song & tiếp tế lương thực!');
+                      synth.playCollect();
+                      setShowSOSModal(false);
+                    }
+                  });
                 }}
                 className="w-full p-3.5 bg-gradient-to-r from-amber-950/80 to-amber-900/40 hover:from-amber-900 hover:to-amber-800 border-2 border-amber-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg"
               >
@@ -3782,20 +4377,22 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               {/* Option 2: Teleport Home */}
               <button
                 onClick={() => {
-                  const pInst = playerRef.current;
-                  if (pInst && chunkMgrRef.current) {
-                    const wgenInstance = chunkMgrRef.current.wg;
-                    const homeH = wgenInstance.h(8, 8);
-                    
-                    pInst.pos.set(8, homeH + 3.5, 8);
-                    pInst.vel.set(0, 0, 0);
-                    pInst.invincibleShieldT = 8; // grant 8 seconds safety shield
-                    setInvincibleSeconds(8);
-                    
-                    triggerToast('🚀 SOS: Đã dịch chuyển khẩn cấp về đồi xuất phát an toàn [+8s Khiên]!');
-                    synth.playPlace();
-                    setShowSOSModal(false);
-                  }
+                  handleSOSTrigger(() => {
+                    const pInst = playerRef.current;
+                    if (pInst && chunkMgrRef.current) {
+                      const wgenInstance = chunkMgrRef.current.wg;
+                      const homeH = wgenInstance.h(8, 8);
+                      
+                      pInst.pos.set(8, homeH + 3.5, 8);
+                      pInst.vel.set(0, 0, 0);
+                      pInst.invincibleShieldT = 8; // grant 8 seconds safety shield
+                      setInvincibleSeconds(8);
+                      
+                      triggerToast('🚀 SOS: Đã dịch chuyển khẩn cấp về đồi xuất phát an toàn [+8s Khiên]!');
+                      synth.playPlace();
+                      setShowSOSModal(false);
+                    }
+                  });
                 }}
                 className="w-full p-3.5 bg-gradient-to-r from-rose-950/80 to-rose-900/40 hover:from-rose-900 hover:to-rose-800 border-2 border-rose-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg"
               >
@@ -3811,21 +4408,23 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               {/* Option 3: Super Gold Funding */}
               <button
                 onClick={() => {
-                  const pInst = playerRef.current;
-                  if (pInst) {
-                    pInst.gold += 350; // Give 350 coins
-                    setGoldCount(pInst.gold);
-                    
-                    setBagItems(prev => {
-                      const updated = { ...prev };
-                      if (!updated['knife']) updated['knife'] = 1; // steel dagger rescue
-                      return updated;
-                    });
-                    
-                    triggerToast('🪙 SOS: Thêm ngân lượng khẩn cấp (+350 vàng) & Dao Thép chuyên dụng!');
-                    synth.playCollect();
-                    setShowSOSModal(false);
-                  }
+                  handleSOSTrigger(() => {
+                    const pInst = playerRef.current;
+                    if (pInst) {
+                      pInst.gold += 350; // Give 350 coins
+                      setGoldCount(pInst.gold);
+                      
+                      setBagItems(prev => {
+                        const updated = { ...prev };
+                        if (!updated['knife']) updated['knife'] = 1; // steel dagger rescue
+                        return updated;
+                      });
+                      
+                      triggerToast('🪙 SOS: Thêm ngân lượng khẩn cấp (+350 vàng) & Dao Thép chuyên dụng!');
+                      synth.playCollect();
+                      setShowSOSModal(false);
+                    }
+                  });
                 }}
                 className="w-full p-3.5 bg-gradient-to-r from-emerald-950/80 to-emerald-900/40 hover:from-emerald-900 hover:to-emerald-800 border-2 border-emerald-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg"
               >
@@ -3841,22 +4440,24 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
               {/* Option 4: Teammate SOS Rescue */}
               <button
                 onClick={() => {
-                  const pInst = playerRef.current;
-                  if (pInst) {
-                    if (socketService.socket?.connected) {
-                      // Emit SOS signal to the multiplayer room using correct chat broadcast event 'chat:send'
-                      const sosMessage = `🚨 SOS CẤP CỨU: Đồng đội ${opts.name} đang cần chi viện gấp tại tọa độ [X: ${Math.floor(pInst.pos.x)}, Y: ${Math.floor(pInst.pos.y)}, Z: ${Math.floor(pInst.pos.z)}]!`;
-                      socketService.emit('chat:send', sosMessage);
-                      triggerToast('📡 SOS: Đã phát tín hiệu cầu cứu chí tử tới radar đồng đội!');
-                      // Grant some invincible seconds just in case
-                      pInst.invincibleShieldT = 15;
-                      setInvincibleSeconds(15);
-                    } else {
-                      triggerToast('❌ KHÔNG THỂ PHÁT SOS: Bạn không ở trong phòng chơi mạng hoặc chưa có kết nối Radar!');
+                  handleSOSTrigger(() => {
+                    const pInst = playerRef.current;
+                    if (pInst) {
+                      if (socketService.socket?.connected) {
+                        // Emit SOS signal to the multiplayer room using correct chat broadcast event 'chat:send'
+                        const sosMessage = `🚨 SOS CẤP CỨU: Đồng đội ${opts.name} đang cần chi viện gấp tại tọa độ [X: ${Math.floor(pInst.pos.x)}, Y: ${Math.floor(pInst.pos.y)}, Z: ${Math.floor(pInst.pos.z)}]!`;
+                        socketService.emit('chat:send', sosMessage);
+                        triggerToast('📡 SOS: Đã phát tín hiệu cầu cứu chí tử tới radar đồng đội!');
+                        // Grant some invincible seconds just in case
+                        pInst.invincibleShieldT = 15;
+                        setInvincibleSeconds(15);
+                      } else {
+                        triggerToast('❌ KHÔNG THỂ PHÁT SOS: Bạn không ở trong phòng chơi mạng hoặc chưa có kết nối Radar!');
+                      }
+                      synth.playCollect();
+                      setShowSOSModal(false);
                     }
-                    synth.playCollect();
-                    setShowSOSModal(false);
-                  }
+                  });
                 }}
                 className="w-full p-3.5 bg-gradient-to-r from-blue-950/80 to-indigo-900/40 hover:from-blue-900 hover:to-indigo-800 border-2 border-blue-500 text-left rounded-2xl transition-all cursor-pointer group active:scale-95 shadow-lg relative overflow-hidden"
               >
@@ -3884,10 +4485,11 @@ export default function VoxelGame({ onBackToLanding }: VoxelGameProps = {}) {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {showSettings && (
-        <div className="absolute inset-0 z-[15] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+        <div id="settings-modal" className="absolute inset-0 z-[15] bg-black/60 backdrop-blur-sm flex items-center justify-center">
           <div className="bg-slate-900 border-2 border-slate-700/80 rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-xl font-black text-center text-white mb-6 uppercase tracking-wider text-emerald-400">⚙️ Cài Đặt (Pause)</h3>
             

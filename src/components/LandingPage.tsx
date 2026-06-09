@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play } from 'lucide-react';
 
+import { GameOptions } from './VoxelGame';
+
 interface LandingPageProps {
-  onEnterGame: () => void;
+  onEnterGame: (options: GameOptions) => void;
 }
 
 export default function LandingPage({ onEnterGame }: LandingPageProps) {
   const [activeTab, setActiveTab] = useState<'features' | 'modes' | 'world'>('features');
+  const [showSelection, setShowSelection] = useState(false);
+  const [tempOptions, setTempOptions] = useState<Partial<GameOptions>>({
+      avatarSkin: 'robot_soldier',
+      companionPet: 'labrador'
+  });
   
   // Custom states for interactive elements
   const [scrolled, setScrolled] = useState(false);
@@ -616,12 +623,70 @@ export default function LandingPage({ onEnterGame }: LandingPageProps) {
         </ul>
 
         <button
-          onClick={onEnterGame}
+          onClick={() => setShowSelection(true)}
           className="nav-cta font-mono text-[9px] sm:text-[11px] tracking-[1px] sm:tracking-[2px] uppercase px-3 py-2 sm:px-5 sm:py-2.5 bg-transparent border border-[#3dffa0] rounded-sm text-[#3dffa0] hover:bg-[#3dffa0] hover:text-black transition-all cursor-pointer"
         >
           Play Now
         </button>
       </nav>
+
+      {showSelection && (
+        <div className="fixed inset-0 z-[100] bg-[#050810]/95 flex items-center justify-center p-4">
+          <div className="bg-[#0d1526] p-8 rounded-lg border border-white/10 max-w-lg w-full text-center">
+             <h2 className="text-2xl font-bold mb-6 text-white" style={{ fontFamily: 'var(--display)' }}>CHỌN NHÂN VẬT & THÚ CƯNG</h2>
+             
+         <div className="mb-6">
+             <p className="text-sm text-[#5a6680] mb-2 uppercase font-mono tracking-wider">Nhân vật</p>
+             <div className="flex gap-4 justify-center">
+                {['robot_soldier', 'castle_char'].map(skin => (
+                  <button key={skin} onClick={() => setTempOptions({...tempOptions, avatarSkin: skin as any})} className={`p-4 border-2 rounded-md ${tempOptions.avatarSkin === skin ? 'border-[#3dffa0]' : 'border-white/10'} hover:border-[#3dffa0]/50 transition-all`}>
+                     <div className="w-20 h-20 bg-slate-800 flex items-center justify-center text-xs text-slate-500 mb-2 border border-white/10 rounded overflow-hidden">
+                        <img src={`/${skin === 'robot_soldier' ? 'robot-soldier-voxel' : 'voxel-castle-character-a'}.webp`} alt={skin} className="w-full h-full object-cover" />
+                     </div>
+                     <span className="text-xs">{skin === 'robot_soldier' ? '🤖 Robot' : '🏰 Castle'}</span>
+                  </button>
+                ))}
+             </div>
+          </div>
+
+          <div className="mb-8">
+             <p className="text-sm text-[#5a6680] mb-2 uppercase font-mono tracking-wider">Thú cưng / Hỗ trợ</p>
+             <div className="flex gap-4 justify-center">
+                {['labrador', 'poodle'].map(pet => (
+                  <button key={pet} onClick={() => setTempOptions({...tempOptions, companionPet: pet as any})} className={`p-4 border-2 rounded-md ${tempOptions.companionPet === pet ? 'border-[#5ba8ff]' : 'border-white/10'} hover:border-[#5ba8ff]/50 transition-all`}>
+                     <div className="w-20 h-20 bg-slate-800 flex items-center justify-center text-xs text-slate-500 mb-2 border border-white/10 rounded overflow-hidden">
+                        <img src={`/${pet === 'labrador' ? 'dog-labrador.webp.png' : 'dog-poodle.webp.png'}`} alt={pet} className="w-full h-full object-cover" />
+                     </div>
+                     <span className="text-xs">{pet === 'labrador' ? '🐶 Cún' : '🐩 Poodle'}</span>
+                  </button>
+                ))}
+             </div>
+          </div>
+
+             <button 
+                onClick={() => {
+                   onEnterGame({
+                       name: 'Player',
+                       seed: 'voxelverse-2026',
+                       mode: 'treasure',
+                       difficulty: 'normal',
+                       biome: 'plains',
+                       botCount: '3',
+                       room: 'lobby',
+                       skinColor: '#dbcca0',
+                       shirtColor: '#3b82f6',
+                       pantsColor: '#1d4ed8',
+                       avatarSkin: tempOptions.avatarSkin as any || 'robot_soldier',
+                       companionPet: tempOptions.companionPet as any || 'labrador'
+                   });
+                }}
+                className="w-full py-3 bg-[#3dffa0] text-black font-bold uppercase tracking-wider rounded-sm hover:bg-[#2ecc71] transition-all"
+             >
+                Bắt đầu game
+             </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. HERO LAYER */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 md:px-6 pt-28 pb-16 md:pt-36 md:pb-24 z-10">
@@ -641,7 +706,7 @@ export default function LandingPage({ onEnterGame }: LandingPageProps) {
 
         <div className="hero-actions mt-8 md:mt-12 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4 justify-center w-full max-w-xs sm:max-w-none px-4">
           <button
-            onClick={onEnterGame}
+            onClick={() => setShowSelection(true)}
             className="btn-primary font-mono text-[11px] md:text-[12px] tracking-[2px] md:tracking-[3px] uppercase px-5 sm:px-9 py-3 sm:py-4 bg-[#3dffa0] text-black font-bold border-none rounded-sm cursor-pointer shadow-[0_0_30px_rgba(61,255,160,0.2)] hover:shadow-[0_0_50px_rgba(61,255,160,0.35)] transition-all text-center"
           >
             ▶ CHƠI NGAY

@@ -36,9 +36,11 @@ export const BLK: Record<number, BlockDef> = {
   17: { n: 'planks', s: 1, c: 0xc4903d, e: '🪟' },
   18: { n: 'treasure chest', s: 1, c: 0xd9a741, e: '🎁' },
   19: { n: 'gold key block', s: 1, c: 0xffd700, e: '🔑' },
+  20: { n: 'bẫy chông gai', s: 1, c: 0x475569, side: 0x64748b, top: 0x94a3b8, e: '📌' },
+  21: { n: 'khối phun lửa', s: 1, c: 0xf97316, side: 0xea580c, top: 0xef4444, e: '🔥' },
 };
 
-export const BL = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+export const BL = [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
 export interface ItemDef {
   id: string;
@@ -78,6 +80,9 @@ export const ITM: Record<string, ItemDef> = {
   pot_dmg: { id: 'pot_dmg', n: 'Thuốc Sức Mạnh', e: '💥🧪', dmg: 5, t: 'potion' },
   wings: { id: 'wings', n: 'Cánh', e: '🪽', fly: true, t: 'special' },
   key: { id: 'key', n: 'Chìa khóa vàng', e: '🔑', t: 'special' },
+  tesla: { id: 'tesla', n: 'Súng Tesla Sấm Sét', e: '⚡🔫', dmg: 50, t: 'weapon' },
+  doom: { id: 'doom', n: 'Rìu Diệt Vong Thần Thoại', e: '🪓🔥', dmg: 40, t: 'weapon' },
+  plat_shield: { id: 'plat_shield', n: 'Khiên Vệ Thần Thượng Cổ', e: '🛡️✨', def: 8, t: 'armor' },
 };
 
 export interface ShopItem {
@@ -841,6 +846,12 @@ export class Player {
     const belowBlock = world.wGet(px, py - 1, pz);
     const headBlock = world.wGet(px, py + 1, pz);
 
+    // Trap blocks damage (bẫy chông gai - 20, khối phun lửa - 21)
+    const isTrap = standBlock === 20 || standBlock === 21 || belowBlock === 20 || belowBlock === 21;
+    if (isTrap && mode !== 'creative') {
+      this.dmg(2.0, 'Dính bẫy nguy hiểm ⚠️', onDie);
+    }
+
     const isLava = standBlock === 13 || belowBlock === 13 || headBlock === 13;
     const isWater = standBlock === 5 || belowBlock === 5 || headBlock === 5;
 
@@ -978,7 +989,9 @@ export const EC: Record<string, any> = {
   pig: { hp: 10, spd: 1.8, dmg: 0, c: 0xf0b0b0, hc: 0xff9999, hos: 0, gold: 2, xp: 2, w: 0.9, h: 1.1, e: '🐷' },
   chicken: { hp: 4, spd: 2.0, dmg: 0, c: 0xffffff, hc: 0xffd700, hos: 0, gold: 1, xp: 1, w: 0.6, h: 0.8, e: '🐔' },
   sheep: { hp: 8, spd: 1.6, dmg: 0, c: 0xe8e8e8, hc: 0xd4d4d4, hos: 0, gold: 2, xp: 2, w: 1.0, h: 1.2, e: '🐑' },
-  key_collectible: { hp: 9999, spd: 0, dmg: 0, c: 0xffd700, hc: 0xffd700, hos: 0, gold: 0, xp: 0, w: 0.5, h: 0.8, e: '🔑', key: true }
+  key_collectible: { hp: 9999, spd: 0, dmg: 0, c: 0xffd700, hc: 0xffd700, hos: 0, gold: 0, xp: 0, w: 0.5, h: 0.8, e: '🔑', key: true },
+  mutant_zombie: { hp: 120, spd: 3.2, dmg: 12, c: 0x990000, hc: 0xff3333, hos: 1, gold: 150, xp: 80, agr: 20, w: 1.4, h: 2.8, e: '💀👹' },
+  world_boss: { hp: 500, spd: 1.6, dmg: 15, c: 0x2e1065, hc: 0xa855f7, hos: 1, gold: 350, xp: 200, agr: 40, w: 2.2, h: 4.8, e: '💀👹' }
 };
 
 /* ─── Voxel Entity Instance Class ─── */
@@ -1065,35 +1078,107 @@ export class Entity {
       scene.add(this.mesh);
     } else {
       const c = this.cfg;
-      this.mesh = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, c.w), new THREE.MeshLambertMaterial({ color: c.c }));
-      this.head = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.9, c.w * 0.9, c.w * 0.9), new THREE.MeshLambertMaterial({ color: c.hc }));
-      this.head.position.set(0, c.h / 2 + c.w * 0.45, 0);
-      this.mesh.add(this.head);
+      if (type === 'zombie') {
+        const gGroup = new THREE.Group();
+        const textureLoader = new THREE.TextureLoader();
+        const map = textureLoader.load('/zombie-shambler-voxel.webp');
+        map.colorSpace = THREE.SRGBColorSpace;
+        const spriteMat = new THREE.SpriteMaterial({ map: map, transparent: true });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.scale.set(c.h * 1.5, c.h * 1.5, c.h * 1.5);
+        sprite.position.y = c.h * 0.5;
+        gGroup.add(sprite);
 
-      if (c.hos) {
-        const em = new THREE.MeshBasicMaterial({ color: 0xff2200 });
-        const eg = new THREE.BoxGeometry(0.09, 0.09, 0.09);
+        this.head = sprite as any; // Using sprite as pseudo-head for animation reference
+        this.mesh = gGroup as any;
+        this.mesh.position.set(x, y, z);
+        scene.add(this.mesh);
+      } else if (type === 'world_boss') {
+        const bossColor = 0x2e1065; 
+        const eyeColor = 0xff0055; 
+        const gGroup = new THREE.Group();
+        
+        const torsoMat = new THREE.MeshLambertMaterial({ color: bossColor, emissive: 0x120024 });
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.9, c.h * 0.5, c.w * 0.9), torsoMat);
+        torso.position.y = c.h * 0.35;
+        gGroup.add(torso);
+        
+        const legMat = new THREE.MeshLambertMaterial({ color: 0x111827 }); 
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.4, c.h * 0.35, c.w * 0.4), legMat);
+        leftLeg.position.set(-c.w * 0.22, c.h * 0.18, 0);
+        leftLeg.name = 'lLeg';
+        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.4, c.h * 0.35, c.w * 0.4), legMat);
+        rightLeg.position.set(c.w * 0.22, c.h * 0.18, 0);
+        rightLeg.name = 'rLeg';
+        gGroup.add(leftLeg);
+        gGroup.add(rightLeg);
+        
+        this.head = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.7, c.w * 0.7, c.w * 0.7), new THREE.MeshLambertMaterial({ color: bossColor }));
+        this.head.position.set(0, c.h * 0.6 + c.w * 0.35, 0);
+        gGroup.add(this.head);
+        
+        const em = new THREE.MeshBasicMaterial({ color: eyeColor });
+        const eg = new THREE.BoxGeometry(0.24, 0.24, 0.24);
         const el = new THREE.Mesh(eg, em);
-        el.position.set(-c.w * 0.18, 0, -c.w * 0.46);
+        el.position.set(-c.w * 0.18, 0.1, -c.w * 0.36);
         const er = new THREE.Mesh(eg, em);
-        er.position.set(c.w * 0.18, 0, -c.w * 0.46);
+        er.position.set(c.w * 0.18, 0.1, -c.w * 0.36);
         this.head.add(el);
         this.head.add(er);
+        
+        const sMat = new THREE.MeshLambertMaterial({ color: 0xa855f7 }); 
+        const sL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), sMat);
+        sL.position.set(-c.w * 0.55, c.h * 0.5, 0);
+        const sR = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), sMat);
+        sR.position.set(c.w * 0.55, c.h * 0.5, 0);
+        gGroup.add(sL);
+        gGroup.add(sR);
+        
+        const bossLight = new THREE.PointLight(0xa855f7, 4, 15);
+        bossLight.position.y = c.h * 0.5;
+        gGroup.add(bossLight);
+        
+        this.mesh = gGroup as any;
+        this.mesh.position.set(x, y, z);
+        scene.add(this.mesh);
+      } else {
+        this.mesh = new THREE.Mesh(new THREE.BoxGeometry(c.w, c.h, c.w), new THREE.MeshLambertMaterial({ color: c.c }));
+        this.head = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.9, c.w * 0.9, c.w * 0.9), new THREE.MeshLambertMaterial({ color: c.hc }));
+        this.head.position.set(0, c.h / 2 + c.w * 0.45, 0);
+        this.mesh.add(this.head);
+
+        if (c.hos) {
+          const em = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+          const eg = new THREE.BoxGeometry(0.09, 0.09, 0.09);
+          const el = new THREE.Mesh(eg, em);
+          el.position.set(-c.w * 0.18, 0, -c.w * 0.46);
+          const er = new THREE.Mesh(eg, em);
+          er.position.set(c.w * 0.18, 0, -c.w * 0.46);
+          this.head.add(el);
+          this.head.add(er);
+        }
+        this.mesh.position.set(x, y + c.h / 2, z);
+        scene.add(this.mesh);
       }
-      this.mesh.position.set(x, y + c.h / 2, z);
-      scene.add(this.mesh);
     }
   }
 
   hit(amt: number): boolean {
     this.hp = Math.max(0, this.hp - amt);
-    const mat = this.mesh.material as THREE.MeshLambertMaterial;
-    if (mat) {
-      mat.emissive = new THREE.Color(0x660000);
-      setTimeout(() => {
-        try { mat.emissive.set(0, 0, 0); } catch (e) { }
-      }, 120);
-    }
+    this.mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((m) => {
+          if ('emissive' in m) {
+            const oldColor = m.emissive.clone();
+            m.emissive.setHex(0x660000);
+            setTimeout(() => {
+              try { m.emissive.copy(oldColor); } catch (e) {}
+            }, 120);
+          }
+        });
+      }
+    });
     return this.hp <= 0;
   }
 
